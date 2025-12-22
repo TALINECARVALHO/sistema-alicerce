@@ -502,6 +502,7 @@ export const AppContent: React.FC = () => {
                         onSelectDemand={(d) => setCurrentPage('demands', d.id)}
                         onNewDemand={() => setIsCreatingDemand(true)}
                         currentSupplier={currentSupplier}
+                        userDepartment={userProfile.department}
                     />
                 );
             case 'suppliers':

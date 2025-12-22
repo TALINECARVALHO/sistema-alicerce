@@ -22,6 +22,7 @@ interface DemandListProps {
     onSelectDemand: (demand: Demand) => void;
     onNewDemand: () => void;
     currentSupplier?: Supplier;
+    userDepartment?: string;  // Departamento do usuário (para filtrar demandas)
 }
 
 const DemandCard: React.FC<{ demand: Demand; groups: Group[]; userRole: UserRole; onSelect: () => void; onDelete: (id: number) => void; currentSupplier?: Supplier }> = ({ demand, groups, userRole, onSelect, onDelete, currentSupplier }) => {
@@ -195,7 +196,7 @@ const DemandTable: React.FC<{ demands: Demand[]; userRole: UserRole; onSelect: (
 
 type ManagerTab = 'rascunhos' | 'em_cotacao' | 'em_analise' | 'com_vencedor' | 'encerrada' | 'todas';
 
-const DemandList: React.FC<DemandListProps> = ({ groups, suppliers, userRole, onSelectDemand, onNewDemand, currentSupplier }) => {
+const DemandList: React.FC<DemandListProps> = ({ groups, suppliers, userRole, onSelectDemand, onNewDemand, currentSupplier, userDepartment }) => {
     const { success, error: toastError } = useToast();
     const isSupplier = userRole === UserRole.FORNECEDOR;
     const isCitizen = userRole === UserRole.CIDADAO;
@@ -281,7 +282,8 @@ const DemandList: React.FC<DemandListProps> = ({ groups, suppliers, userRole, on
                 page,
                 effectivePageSize,
                 { searchTerm, status: statusFilter, statuses: statusesFilter },
-                isSupplier ? supplierGroupIds : undefined
+                isSupplier ? supplierGroupIds : undefined,
+                userRole === UserRole.SECRETARIA ? userDepartment : undefined  // Filtrar por departamento se for secretaria
             );
 
             if (isMounted.current) {

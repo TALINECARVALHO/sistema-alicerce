@@ -105,7 +105,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProf
       {
         title: 'Aprendizado',
         items: [
-          { page: 'training', icon: <SparklesIcon className="w-5 h-5" />, label: 'Treinamento Requisitantes' },
+          { page: 'training', icon: <SparklesIcon className="w-5 h-5" />, label: 'Manual de Treinamento' },
         ]
       },
       {

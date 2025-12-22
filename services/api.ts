@@ -655,7 +655,7 @@ export const approveSupplierWorkflow = async (supplier: Supplier): Promise<{ suc
     }
 };
 
-export const fetchDemands = async (page: number, pageSize: number, filters?: any, supplierGroups?: string[]) => {
+export const fetchDemands = async (page: number, pageSize: number, filters?: any, supplierGroups?: string[], userDepartment?: string) => {
     let query = supabase.from('demands').select('*, items(*), proposals(*), questions(*)', { count: 'exact' });
 
     if (filters?.status) query = query.eq('status', filters.status);
@@ -664,6 +664,11 @@ export const fetchDemands = async (page: number, pageSize: number, filters?: any
     // Filtro para fornecedores (ver apenas demandas de seus grupos)
     if (supplierGroups && supplierGroups.length > 0) {
         query = query.filter('items.group_id', 'in', `(${supplierGroups.join(',')})`);
+    }
+
+    // Filtro para secretarias (ver apenas demandas de seu departamento)
+    if (userDepartment) {
+        query = query.eq('requesting_department', userDepartment);
     }
 
     const from = (page - 1) * pageSize;
