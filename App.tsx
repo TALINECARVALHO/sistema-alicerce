@@ -662,6 +662,15 @@ export const AppContent: React.FC = () => {
     );
 
     if (!session) {
+        // Login page should not have the public header
+        if (publicView === 'login') {
+            return (
+                <div className="min-h-screen bg-slate-50">
+                    <LoginPage onBack={() => setPublicView('transparency')} />
+                </div>
+            );
+        }
+
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col">
                 <PublicHeader currentView={publicView} onNavigate={setPublicView} />
@@ -707,7 +716,6 @@ export const AppContent: React.FC = () => {
                             onCancel={() => setPublicView('transparency')}
                         />
                     )}
-                    {publicView === 'login' && <LoginPage onBack={() => setPublicView('transparency')} />}
                 </main>
             </div>
         );
