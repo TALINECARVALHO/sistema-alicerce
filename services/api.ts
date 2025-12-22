@@ -82,39 +82,7 @@ export const getSupplierDocumentUrl = async (path: string): Promise<string | nul
     try {
         console.log('🔗 Gerando URL para:', path);
 
-        // For public buckets, we need to verify the file exists first
-        // because getPublicUrl always returns a URL even if file doesn't exist
-        const { data: listData, error: listError } = await supabase.storage
-            .from('supplier-documents')
-            .list(path.split('/')[0], {
-                search: path.split('/')[1]
-            });
-
-        if (listError) {
-            console.error('❌ Erro ao verificar arquivo:', listError);
-            // If we can't list, try signed URL (might be private bucket)
-            const { data, error } = await supabase.storage
-                .from('supplier-documents')
-                .createSignedUrl(path, 3600);
-
-            if (error) {
-                console.error('❌ Erro ao criar URL assinada:', error);
-                return null;
-            }
-
-            console.log('✅ URL assinada gerada:', data.signedUrl);
-            return data.signedUrl;
-        }
-
-        // Check if file exists in the list
-        const fileExists = listData && listData.length > 0;
-
-        if (!fileExists) {
-            console.error('❌ Arquivo não encontrado no Storage:', path);
-            return null;
-        }
-
-        // File exists, get public URL
+        // For public buckets, just get the public URL directly
         const { data: publicData } = supabase.storage
             .from('supplier-documents')
             .getPublicUrl(path);
@@ -124,7 +92,7 @@ export const getSupplierDocumentUrl = async (path: string): Promise<string | nul
             return publicData.publicUrl;
         }
 
-        console.error('❌ Não foi possível gerar URL');
+        console.error('❌ Não foi possível gerar URL pública');
         return null;
     } catch (e) {
         console.error('💥 Exceção ao gerar URL:', e);
