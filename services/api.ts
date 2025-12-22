@@ -91,22 +91,54 @@ export const getSupplierDocumentUrl = async (path: string): Promise<string | nul
 
 const uploadSupplierFile = async (supplierId: number, file: File): Promise<string | null> => {
     try {
+        console.log('📤 Iniciando upload:', { supplierId, fileName: file.name, fileSize: file.size });
+
         // Sanitize filename
         const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const path = `${supplierId}/${Date.now()}_${cleanName}`;
-        const { data, error } = await supabase.storage.from('supplier-documents').upload(path, file);
+
+        console.log('📂 Path do arquivo:', path);
+
+        // Use upsert to avoid conflicts and set upsert to true
+        const { data, error } = await supabase.storage
+            .from('supplier-documents')
+            .upload(path, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+
         if (error) {
-            console.error('Upload error:', error);
-            return null;
+            console.error('❌ Erro no upload:', error);
+
+            // Try alternative approach: use public bucket upload
+            console.log('🔄 Tentando abordagem alternativa...');
+            const { data: data2, error: error2 } = await supabase.storage
+                .from('supplier-documents')
+                .upload(path, file, {
+                    cacheControl: '3600',
+                    upsert: true // Allow overwrite
+                });
+
+            if (error2) {
+                console.error('❌ Erro na segunda tentativa:', error2);
+                return null;
+            }
+
+            console.log('✅ Upload bem-sucedido (segunda tentativa):', { path, data: data2 });
+            return path;
         }
+
+        console.log('✅ Upload bem-sucedido:', { path, data });
         return path;
     } catch (e) {
-        console.error('Upload exception:', e);
+        console.error('💥 Exceção no upload:', e);
         return null;
     }
 };
 
 export const createSupplier = async (supplierData: Omit<Supplier, 'id' | 'status'>, files?: Record<string, File | null>): Promise<Supplier> => {
+    console.log('🏢 Criando fornecedor:', { name: supplierData.name, hasFiles: !!files, fileCount: files ? Object.keys(files).length : 0 });
+
     // 1. Initial insert to get ID
     const payload = { ...supplierData, status: 'Pendente' };
     const { data: initialData, error } = await supabase.from('suppliers').insert([payload]).select().single();
@@ -114,14 +146,17 @@ export const createSupplier = async (supplierData: Omit<Supplier, 'id' | 'status
     if (error) throw error;
 
     let supplier = initialData as Supplier;
+    console.log('✅ Fornecedor criado com ID:', supplier.id);
 
     // 2. Upload files if present
     if (files && Object.keys(files).length > 0) {
+        console.log('📁 Processando arquivos...', Object.keys(files));
         const updatedDocuments = [...(supplier.documents || [])];
         let hasChanges = false;
 
         for (const [docName, file] of Object.entries(files)) {
             if (file) {
+                console.log(`📄 Fazendo upload de: ${docName}`);
                 const path = await uploadSupplierFile(supplier.id, file);
                 if (path) {
                     const docIndex = updatedDocuments.findIndex(d => d.name === docName);
@@ -142,11 +177,15 @@ export const createSupplier = async (supplierData: Omit<Supplier, 'id' | 'status
                         });
                     }
                     hasChanges = true;
+                    console.log(`✅ Arquivo ${docName} salvo em: ${path}`);
+                } else {
+                    console.error(`❌ Falha ao fazer upload de: ${docName}`);
                 }
             }
         }
 
         if (hasChanges) {
+            console.log('💾 Atualizando documentos no banco...', updatedDocuments);
             const { data: updatedData, error: updateError } = await supabase
                 .from('suppliers')
                 .update({ documents: updatedDocuments })
@@ -156,8 +195,13 @@ export const createSupplier = async (supplierData: Omit<Supplier, 'id' | 'status
 
             if (!updateError && updatedData) {
                 supplier = updatedData as Supplier;
+                console.log('✅ Documentos atualizados no banco');
+            } else {
+                console.error('❌ Erro ao atualizar documentos:', updateError);
             }
         }
+    } else {
+        console.log('⚠️ Nenhum arquivo para fazer upload');
     }
 
     return supplier;

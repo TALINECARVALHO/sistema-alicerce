@@ -51,7 +51,7 @@ const SupplierCard: React.FC<{
     userRole: UserRole;
 }> = ({ supplier, onAnalyze, onDelete, onInactivate, onReactivate, onApprove, userRole }) => {
     const statusConfig = STATUS_CONFIG[supplier.status];
-    const canManage = [UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO].includes(userRole);
+    const canManage = [UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO, UserRole.ADMIN].includes(userRole);
 
     return (
         <div className="bg-white rounded-[20px] p-6 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] hover:shadow-xl transition-all duration-300 border border-slate-100 flex flex-col relative group">
@@ -128,7 +128,7 @@ const SupplierCard: React.FC<{
 
 const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpdateStatus, onDeleteSupplier, onUpdateSupplier, userRole }) => {
     const { error: toastError } = useToast();
-    const canManage = [UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO].includes(userRole);
+    const canManage = [UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO, UserRole.ADMIN].includes(userRole);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<SupplierStatus>('Ativo');
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
@@ -168,15 +168,24 @@ const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpd
     };
 
     const handleDownloadDocument = async (path: string, fileName: string) => {
+        console.log('🔍 Tentando baixar documento:', { path, fileName });
         const url = await api.getSupplierDocumentUrl(path);
-        if (!url) { toastError("Não foi possível gerar o link de download."); return; }
+        console.log('📥 URL obtida:', url);
+
+        if (!url) {
+            console.error('❌ Falha ao gerar URL');
+            toastError("Não foi possível gerar o link de download.");
+            return;
+        }
 
         const link = document.createElement('a');
         link.href = url;
         link.setAttribute('download', fileName);
+        link.setAttribute('target', '_blank'); // Tentar abrir em nova aba se download falhar
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        console.log('✅ Download iniciado');
     };
 
     // Custom Tab (matching Demands)

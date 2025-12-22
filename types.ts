@@ -4,6 +4,7 @@ export enum UserRole {
     ALMOXARIFADO = 'Almoxarifado',
     CONTRATACOES = 'Departamento de Contratações',
     GESTOR_SUPREMO = 'super_admin',
+    ADMIN = 'Administrador',
     FORNECEDOR = 'Fornecedor',
     CIDADAO = 'Cidadão (Transparência)',
 }
