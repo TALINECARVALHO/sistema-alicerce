@@ -115,8 +115,11 @@ const SupplierCard: React.FC<{
                             {canManage && (
                                 <button onClick={onDelete} className="text-slate-300 hover:text-red-500 transition-colors"><TrashIcon className="w-4 h-4" /></button>
                             )}
+                            {supplier.status === 'Ativo' && canManage && (
+                                <button onClick={onInactivate} title="Inativar Fornecedor" className="text-slate-300 hover:text-orange-500 transition-colors"><BanIcon className="w-4 h-4" /></button>
+                            )}
                             {supplier.status === 'Inativo' && canManage && (
-                                <button onClick={onReactivate} className="text-slate-300 hover:text-blue-500 transition-colors"><RefreshIcon className="w-4 h-4" /></button>
+                                <button onClick={onReactivate} title="Reativar Fornecedor" className="text-slate-300 hover:text-blue-500 transition-colors"><RefreshIcon className="w-4 h-4" /></button>
                             )}
                         </>
                     )}
@@ -427,7 +430,11 @@ const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpd
                                                 <textarea value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} className="w-full p-4 border border-red-200 rounded-xl text-sm min-h-[100px] mb-4 bg-white" placeholder="Descreva o motivo..."></textarea>
                                                 <div className="flex gap-3 justify-end">
                                                     <button onClick={() => setIsRejectionMode(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
-                                                    <button onClick={() => { api.rejectSupplier(analyzingSupplier.id, rejectionReason); setAnalyzingSupplier(null); }} className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 text-sm">Confirmar Reprovação</button>
+                                                    <button onClick={async () => {
+                                                        await api.rejectSupplier(analyzingSupplier.id, rejectionReason);
+                                                        setAnalyzingSupplier(null);
+                                                        window.location.reload();
+                                                    }} className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 text-sm">Confirmar Reprovação</button>
                                                 </div>
                                             </div>
                                         )}
