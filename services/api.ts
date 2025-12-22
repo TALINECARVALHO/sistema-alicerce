@@ -221,19 +221,26 @@ export const createSupplier = async (supplierData: Omit<Supplier, 'id' | 'status
         }
 
         if (hasChanges) {
-            console.log('💾 Atualizando documentos no banco...', updatedDocuments);
+            console.log('💾 Atualizando documentos no banco...');
+            console.log('📋 JSON que será salvo:', JSON.stringify(updatedDocuments, null, 2));
+
             const { data: updatedData, error: updateError } = await supabase
                 .from('suppliers')
                 .update({ documents: updatedDocuments })
                 .eq('id', supplier.id)
-                .select()
-                .single();
+                .select();
 
-            if (!updateError && updatedData) {
-                supplier = updatedData as Supplier;
+            console.log('📊 Linhas retornadas:', updatedData?.length || 0);
+
+            if (!updateError && updatedData && updatedData.length > 0) {
+                supplier = updatedData[0] as Supplier;
                 console.log('✅ Documentos atualizados no banco');
-            } else {
+                console.log('📋 Documentos salvos:', JSON.stringify(updatedData[0].documents, null, 2));
+            } else if (updateError) {
                 console.error('❌ Erro ao atualizar documentos:', updateError);
+                console.error('❌ Detalhes do erro:', JSON.stringify(updateError, null, 2));
+            } else {
+                console.error('❌ Nenhum dado retornado do update');
             }
         }
     } else {
