@@ -240,7 +240,22 @@ export const createSupplier = async (supplierData: Omit<Supplier, 'id' | 'status
                 console.error('❌ Erro ao atualizar documentos:', updateError);
                 console.error('❌ Detalhes do erro:', JSON.stringify(updateError, null, 2));
             } else {
-                console.error('❌ Nenhum dado retornado do update');
+                // Update succeeded but returned 0 rows (RLS blocking SELECT)
+                // Fetch the supplier again to get updated data
+                console.log('⚠️ Update não retornou dados, fazendo fetch individual...');
+                const { data: fetchedData, error: fetchError } = await supabase
+                    .from('suppliers')
+                    .select('*')
+                    .eq('id', supplier.id)
+                    .single();
+
+                if (!fetchError && fetchedData) {
+                    supplier = fetchedData as Supplier;
+                    console.log('✅ Dados atualizados obtidos via fetch');
+                    console.log('📋 Documentos salvos:', JSON.stringify(fetchedData.documents, null, 2));
+                } else {
+                    console.error('❌ Erro ao fazer fetch:', fetchError);
+                }
             }
         }
     } else {
