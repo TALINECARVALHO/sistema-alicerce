@@ -93,11 +93,10 @@ const FileInput: React.FC<{
                             value={validityDate}
                             onChange={(e) => onDateChange(e.target.value)}
                             className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-2 pl-7"
-                            title="Data de Validade do Documento"
-                            required
+                            title="Data de Validade do Documento (Opcional)"
                         />
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 text-right">Validade <span className="text-red-500">*</span></p>
+                    <p className="text-[10px] text-slate-400 mt-1 text-right">Validade (opcional)</p>
                 </div>
             )}
         </div>
@@ -230,12 +229,7 @@ const SupplierPreRegistrationForm: React.FC<SupplierPreRegistrationFormProps> = 
                 docErrors.push(`Anexo faltando: ${docName}`);
             }
 
-            // Check Date Validity (Skip 'Contrato/Estatuto Social' AND 'Cartão CNPJ')
-            if (docName !== 'Contrato/Estatuto Social' && docName !== 'Cartão CNPJ') {
-                if (!documentDates[docName]) {
-                    docErrors.push(`Data de validade faltando: ${docName}`);
-                }
-            }
+            // Date is now optional - no validation needed
         });
 
         if (docErrors.length > 0) {
