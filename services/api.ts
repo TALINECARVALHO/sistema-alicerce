@@ -54,6 +54,13 @@ export const checkDatabaseHealth = async (): Promise<{ templates: boolean; logs:
 export const fetchSuppliers = async (): Promise<Supplier[]> => {
     const { data, error } = await supabase.from('suppliers').select('*').order('name');
     if (error) return [];
+
+    console.log('📊 fetchSuppliers - Total fornecedores:', data?.length);
+    if (data && data.length > 0) {
+        console.log('📋 Primeiro fornecedor:', data[0]);
+        console.log('📄 Documentos do primeiro:', data[0].documents);
+    }
+
     return data as Supplier[];
 };
 

@@ -439,25 +439,34 @@ const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpd
                                             Documentação
                                         </h4>
                                         <div className="space-y-3">
-                                            {analyzingSupplier.documents?.map((doc, idx) => (
-                                                <div key={idx} className="p-4 bg-white rounded-xl border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all group">
-                                                    <div className="flex items-start gap-3 mb-3">
-                                                        <div className="p-2 bg-slate-50 rounded-lg text-slate-400 group-hover:text-blue-500"><FileIcon className="w-5 h-5" /></div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-bold text-slate-700 truncate" title={doc.name}>{doc.name}</p>
-                                                            <p className="text-[10px] text-slate-400">
-                                                                {doc.validityDate ? `Validade: ${new Date(doc.validityDate).toLocaleDateString()}` : 'Sem validade'}
-                                                            </p>
+                                            {(() => {
+                                                console.log('🔍 DEBUG: Documentos do fornecedor:', analyzingSupplier.documents);
+                                                return analyzingSupplier.documents?.map((doc, idx) => {
+                                                    console.log(`📄 Documento ${idx}:`, doc);
+                                                    console.log(`   - storagePath existe?`, !!doc.storagePath);
+                                                    console.log(`   - storagePath valor:`, doc.storagePath);
+                                                    return (
+                                                        <div key={idx} className="p-4 bg-white rounded-xl border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all group">
+                                                            <div className="flex items-start gap-3 mb-3">
+                                                                <div className="p-2 bg-slate-50 rounded-lg text-slate-400 group-hover:text-blue-500"><FileIcon className="w-5 h-5" /></div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-bold text-slate-700 truncate" title={doc.name}>{doc.name}</p>
+                                                                    <p className="text-[10px] text-slate-400">
+                                                                        {doc.validityDate ? `Validade: ${new Date(doc.validityDate).toLocaleDateString()}` : 'Sem validade'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            {doc.storagePath && (
+                                                                <div className="flex gap-2">
+                                                                    <button onClick={() => handleDownloadDocument(doc.storagePath!, doc.fileName || doc.name)} className="w-full py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                                                                        Baixar Documento
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    </div>
-                                                    {doc.storagePath && (
-                                                        <div className="flex gap-2">
-                                                            <button onClick={() => handleDownloadDocument(doc.storagePath!, doc.name)} className="flex-1 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-100">Baixar</button>
-                                                            <button onClick={() => handleViewDocument(doc.storagePath!)} className="flex-1 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-100">Visualizar</button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                    );
+                                                });
+                                            })()}
                                             {(!analyzingSupplier.documents || analyzingSupplier.documents.length === 0) && (
                                                 <div className="text-center py-8 text-slate-400 text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">
                                                     Sem documentos.
