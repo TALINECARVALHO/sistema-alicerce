@@ -73,9 +73,20 @@ export const deleteSupplier = async (id: number): Promise<void> => {
 
 export const getSupplierDocumentUrl = async (path: string): Promise<string | null> => {
     try {
+        // Try to get public URL first (works for public buckets)
+        const { data: publicData } = supabase.storage.from('supplier-documents').getPublicUrl(path);
+
+        if (publicData?.publicUrl) {
+            return publicData.publicUrl;
+        }
+
+        // Fallback to signed URL (for private buckets)
         const { data, error } = await supabase.storage.from('supplier-documents').createSignedUrl(path, 3600);
         return error ? null : data.signedUrl;
-    } catch (e) { return null; }
+    } catch (e) {
+        console.error('Error getting document URL:', e);
+        return null;
+    }
 };
 
 const uploadSupplierFile = async (supplierId: number, file: File): Promise<string | null> => {
