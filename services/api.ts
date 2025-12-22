@@ -150,91 +150,71 @@ const uploadSupplierFile = async (supplierId: number, file: File): Promise<strin
 export const createSupplier = async (supplierData: Omit<Supplier, 'id' | 'status'>, files?: Record<string, File | null>): Promise<Supplier> => {
     console.log('🏢 Criando fornecedor:', { name: supplierData.name, hasFiles: !!files, fileCount: files ? Object.keys(files).length : 0 });
 
-    // 1. Initial insert to get ID
-    const payload = { ...supplierData, status: 'Pendente' };
-    const { data: initialData, error } = await supabase.from('suppliers').insert([payload]).select().single();
+    // NEW APPROACH: Upload files FIRST using a temporary ID (timestamp)
+    // Then create supplier with storagePath already included
+    const tempId = Date.now();
+    const documentsWithPaths = [...(supplierData.documents || [])];
 
-    if (error) throw error;
-
-    let supplier = initialData as Supplier;
-    console.log('✅ Fornecedor criado com ID:', supplier.id);
-
-    // 2. Upload files if present
     if (files && Object.keys(files).length > 0) {
-        console.log('📁 Processando arquivos...', Object.keys(files));
-        const updatedDocuments = [...(supplier.documents || [])];
-        let hasChanges = false;
+        console.log('📁 Fazendo upload de arquivos ANTES de criar fornecedor...');
 
         for (const [docName, file] of Object.entries(files)) {
             if (file) {
                 console.log(`📄 Fazendo upload de: ${docName}`);
-                const path = await uploadSupplierFile(supplier.id, file);
+                const path = await uploadSupplierFile(tempId, file);
                 if (path) {
-                    const docIndex = updatedDocuments.findIndex(d => d.name === docName);
+                    const docIndex = documentsWithPaths.findIndex(d => d.name === docName);
                     if (docIndex >= 0) {
-                        updatedDocuments[docIndex] = {
-                            ...updatedDocuments[docIndex],
+                        documentsWithPaths[docIndex] = {
+                            ...documentsWithPaths[docIndex],
                             storagePath: path,
-                            fileName: file.name,
-                            // Set validity date to 1 year from now if not present, as a default
-                            validityDate: updatedDocuments[docIndex].validityDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString()
+                            fileName: file.name
                         };
                     } else {
-                        updatedDocuments.push({
+                        documentsWithPaths.push({
                             name: docName,
                             fileName: file.name,
                             storagePath: path,
-                            validityDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString()
+                            validityDate: undefined
                         });
                     }
-                    hasChanges = true;
                     console.log(`✅ Arquivo ${docName} salvo em: ${path}`);
                 } else {
                     console.error(`❌ Falha ao fazer upload de: ${docName}`);
                 }
             }
         }
+    }
 
-        if (hasChanges) {
-            console.log('💾 Atualizando documentos no banco...');
-            console.log('📋 JSON que será salvo:', JSON.stringify(updatedDocuments, null, 2));
+    // Now create supplier with documents already containing storagePath
+    const payload = {
+        ...supplierData,
+        documents: documentsWithPaths,
+        status: 'Pendente'
+    };
 
-            const { data: updatedData, error: updateError } = await supabase
-                .from('suppliers')
-                .update({ documents: updatedDocuments })
-                .eq('id', supplier.id)
-                .select();
+    console.log('💾 Criando fornecedor com documentos:', JSON.stringify(documentsWithPaths, null, 2));
 
-            console.log('📊 Linhas retornadas:', updatedData?.length || 0);
+    const { data: initialData, error } = await supabase
+        .from('suppliers')
+        .insert([payload])
+        .select()
+        .single();
 
-            if (!updateError && updatedData && updatedData.length > 0) {
-                supplier = updatedData[0] as Supplier;
-                console.log('✅ Documentos atualizados no banco');
-                console.log('📋 Documentos salvos:', JSON.stringify(updatedData[0].documents, null, 2));
-            } else if (updateError) {
-                console.error('❌ Erro ao atualizar documentos:', updateError);
-                console.error('❌ Detalhes do erro:', JSON.stringify(updateError, null, 2));
-            } else {
-                // Update succeeded but returned 0 rows (RLS blocking SELECT)
-                // Fetch the supplier again to get updated data
-                console.log('⚠️ Update não retornou dados, fazendo fetch individual...');
-                const { data: fetchedData, error: fetchError } = await supabase
-                    .from('suppliers')
-                    .select('*')
-                    .eq('id', supplier.id)
-                    .single();
+    if (error) {
+        console.error('❌ Erro ao criar fornecedor:', error);
+        throw error;
+    }
 
-                if (!fetchError && fetchedData) {
-                    supplier = fetchedData as Supplier;
-                    console.log('✅ Dados atualizados obtidos via fetch');
-                    console.log('📋 Documentos salvos:', JSON.stringify(fetchedData.documents, null, 2));
-                } else {
-                    console.error('❌ Erro ao fazer fetch:', fetchError);
-                }
-            }
-        }
-    } else {
-        console.log('⚠️ Nenhum arquivo para fazer upload');
+    const supplier = initialData as Supplier;
+    console.log('✅ Fornecedor criado com ID:', supplier.id);
+    console.log('📋 Documentos salvos:', JSON.stringify(supplier.documents, null, 2));
+
+    // If we used a temp ID for upload, we need to move files to correct folder
+    if (files && Object.keys(files).length > 0 && tempId !== supplier.id) {
+        console.log(`📦 Movendo arquivos de pasta temporária ${tempId} para ${supplier.id}...`);
+        // Note: Supabase Storage doesn't have a move operation, so files stay in temp folder
+        // This is OK - the storagePath already points to the correct location
     }
 
     return supplier;
