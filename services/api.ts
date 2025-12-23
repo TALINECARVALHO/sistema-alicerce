@@ -646,9 +646,8 @@ export const resetSystemUserPassword = async (userId: string, email: string, use
                     </p>
                     <ol style="margin: 10px 0 0 0; padding-left: 20px; color: #92400e; font-size: 12px; line-height: 1.6;">
                         <li>Faça login no sistema com a senha acima</li>
-                        <li>Clique no seu nome no canto superior direito</li>
-                        <li>Selecione <strong>"Configurações"</strong></li>
-                        <li>Na seção "Segurança", clique em <strong>"Alterar Senha"</strong></li>
+                        <li>Clique no seu <strong>nome/avatar</strong> no canto superior direito</li>
+                        <li>Selecione <strong>"Alterar Senha"</strong></li>
                         <li>Digite a senha atual (a que está neste email)</li>
                         <li>Digite sua nova senha (mínimo 6 caracteres)</li>
                         <li>Confirme a nova senha</li>
