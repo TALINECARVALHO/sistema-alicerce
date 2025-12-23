@@ -186,6 +186,20 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
         setIsExporting(false);
     };
 
+    // Estatísticas
+    const stats = useMemo(() => {
+        const totalDemands = filteredDemands.length;
+        const totalSuppliers = filteredSuppliers.length;
+        const totalValue = filteredDemands
+            .filter(d => d.winner?.totalValue)
+            .reduce((sum, d) => sum + (d.winner?.totalValue || 0), 0);
+        const completedDemands = filteredDemands.filter(d =>
+            d.status === DemandStatus.CONCLUIDA || d.status === DemandStatus.VENCEDOR_DEFINIDO
+        ).length;
+
+        return { totalDemands, totalSuppliers, totalValue, completedDemands };
+    }, [filteredDemands, filteredSuppliers]);
+
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
             {/* Hero Section */}
@@ -197,22 +211,75 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                     <div className="absolute -bottom-32 -left-20 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
                 </div>
 
-                <div className="relative max-w-7xl mx-auto py-24 px-4 sm:px-6 lg:px-8 text-center sm:text-left">
-                    <h1 className="text-4xl tracking-tight font-extrabold text-white sm:text-5xl md:text-6xl">
-                        <span className="block xl:inline">Portal da</span>{' '}
-                        <span className="block text-blue-400 xl:inline">Transparência</span>
-                    </h1>
-                    <p className="mt-3 max-w-md mx-auto sm:mx-0 text-base text-slate-300 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
-                        Acompanhe o credenciamento de serviços e materiais de construção.
-                        Acesso simplificado aos dados de fornecedores e itens homologados.
-                    </p>
+                <div className="relative max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+                    <div className="text-center sm:text-left mb-8">
+                        <h1 className="text-4xl tracking-tight font-extrabold text-white sm:text-5xl md:text-6xl">
+                            <span className="block xl:inline">Portal da</span>{' '}
+                            <span className="block text-blue-400 xl:inline">Transparência</span>
+                        </h1>
+                        <p className="mt-3 max-w-md mx-auto sm:mx-0 text-base text-slate-300 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
+                            Acompanhe o credenciamento de serviços e materiais de construção.
+                            Acesso simplificado aos dados de fornecedores e itens homologados.
+                        </p>
+                    </div>
 
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-500/20 p-2 rounded-lg">
+                                    <MegaphoneIcon className="w-6 h-6 text-blue-300" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-bold text-white">{stats.totalDemands}</p>
+                                    <p className="text-xs text-blue-200">Demandas</p>
+                                </div>
+                            </div>
+                        </div>
 
+                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-green-500/20 p-2 rounded-lg">
+                                    <CheckCircleIcon className="w-6 h-6 text-green-300" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-bold text-white">{stats.completedDemands}</p>
+                                    <p className="text-xs text-green-200">Concluídas</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-indigo-500/20 p-2 rounded-lg">
+                                    <TruckIcon className="w-6 h-6 text-indigo-300" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-bold text-white">{stats.totalSuppliers}</p>
+                                    <p className="text-xs text-indigo-200">Fornecedores</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-emerald-500/20 p-2 rounded-lg">
+                                    <TagIcon className="w-6 h-6 text-emerald-300" />
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-bold text-white">
+                                        {stats.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                    </p>
+                                    <p className="text-xs text-emerald-200">Valor Total</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             {/* Main Content Area */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10">
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden min-h-[600px] border border-slate-100">
                     {/* Navigation Tabs */}
                     <div className="flex border-b border-slate-200 bg-slate-50/50">
@@ -303,44 +370,71 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                 <div className="grid gap-4">
                                     {filteredDemands.map(demand => {
                                         const statusColor = STATUS_COLORS[demand.status];
+                                        const hasWinner = demand.status === DemandStatus.VENCEDOR_DEFINIDO || demand.status === DemandStatus.CONCLUIDA;
+
                                         return (
                                             <div
                                                 key={demand.id}
                                                 onClick={() => onSelectDemand && onSelectDemand(demand)}
-                                                className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer group"
+                                                className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer group relative overflow-hidden"
                                             >
-                                                <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4">
-                                                    <div>
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <span className="bg-slate-100 text-slate-600 text-xs font-mono px-2 py-1 rounded border border-slate-200 font-bold">{demand.protocol}</span>
-                                                            <span className="text-xs text-slate-400 flex items-center gap-1">
-                                                                <ClockIcon className="w-3 h-3" /> {new Date(demand.createdAt).toLocaleDateString('pt-BR')}
+                                                {/* Decorative gradient bar */}
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${hasWinner ? 'bg-gradient-to-b from-green-500 to-emerald-600' : 'bg-gradient-to-b from-blue-500 to-indigo-600'}`}></div>
+
+                                                <div className="flex flex-col lg:flex-row justify-between lg:items-start gap-4 pl-4">
+                                                    <div className="flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                                                            <span className="bg-slate-100 text-slate-700 text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-200 font-bold">
+                                                                {demand.protocol}
                                                             </span>
-                                                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
+                                                            <span className="text-xs text-slate-400 flex items-center gap-1">
+                                                                <ClockIcon className="w-3.5 h-3.5" />
+                                                                {new Date(demand.createdAt).toLocaleDateString('pt-BR')}
+                                                            </span>
+                                                            <span className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
                                                                 {demand.status}
                                                             </span>
                                                         </div>
-                                                        <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors mb-1">{demand.title}</h3>
-                                                        <p className="text-sm text-slate-500 flex items-center gap-2">
-                                                            <BuildingIcon className="w-4 h-4" /> {demand.requestingDepartment}
-                                                        </p>
+
+                                                        <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors mb-2 leading-tight">
+                                                            {demand.title}
+                                                        </h3>
+
+                                                        <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                                                            <div className="flex items-center gap-2">
+                                                                <BuildingIcon className="w-4 h-4 text-slate-400" />
+                                                                <span className="font-medium">{demand.requestingDepartment}</span>
+                                                            </div>
+                                                            {demand.items && demand.items.length > 0 && (
+                                                                <div className="flex items-center gap-2">
+                                                                    <TagIcon className="w-4 h-4 text-slate-400" />
+                                                                    <span className="text-xs text-slate-500">{demand.items.length} {demand.items.length === 1 ? 'item' : 'itens'}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
 
-                                                    <div className="flex items-center gap-6 mt-2 lg:mt-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                                                    <div className="flex items-center gap-4 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                                                         {demand.winner ? (
-                                                            <div className="text-right">
-                                                                <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Vencedor</p>
-                                                                <p className="font-bold text-slate-800 text-sm md:text-base">{demand.winner.supplierName}</p>
-                                                                <p className="text-green-600 font-bold text-sm">{demand.winner.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 min-w-[200px]">
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <CheckCircleIcon className="w-4 h-4 text-green-600" />
+                                                                    <p className="text-xs text-green-700 uppercase tracking-wider font-bold">Vencedor</p>
+                                                                </div>
+                                                                <p className="font-bold text-slate-900 text-base mb-1">{demand.winner.supplierName}</p>
+                                                                <p className="text-green-600 font-bold text-lg">
+                                                                    {demand.winner.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                </p>
                                                             </div>
                                                         ) : (
-                                                            <div className="text-right flex items-center gap-2 text-slate-400 bg-slate-50 px-3 py-2 rounded-lg">
+                                                            <div className="text-center flex items-center gap-2 text-slate-400 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200">
                                                                 <InformationCircleIcon className="w-5 h-5" />
                                                                 <span className="text-xs font-medium">Aguardando definição</span>
                                                             </div>
                                                         )}
-                                                        <div className="hidden sm:flex h-10 w-10 bg-slate-100 rounded-full items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                                            <span className="text-xl">→</span>
+
+                                                        <div className="hidden sm:flex h-12 w-12 bg-slate-100 rounded-full items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all group-hover:scale-110">
+                                                            <span className="text-2xl">→</span>
                                                         </div>
                                                     </div>
                                                 </div>
