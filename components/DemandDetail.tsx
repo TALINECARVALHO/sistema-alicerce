@@ -509,20 +509,6 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                     {demand.group && <span className="flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-1 rounded-md"><TagIcon className="w-3 h-3" /> {demand.group}</span>}
                 </div>
                 <h2 className="text-4xl font-extrabold text-slate-900 leading-tight">{demand.title}</h2>
-                {!(userRole === UserRole.FORNECEDOR && demand.status === DemandStatus.AGUARDANDO_PROPOSTA && !supplierProposal) && (
-                    <div className="flex flex-wrap items-center gap-3 text-sm">
-                        <span className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold border border-indigo-100">
-                            <BuildingIcon className="w-4 h-4" />
-                            {demand.requestingDepartment}
-                        </span>
-                        {demand.deliveryLocation && (
-                            <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold border border-emerald-100">
-                                <LocationMarkerIcon className="w-4 h-4" />
-                                {demand.deliveryLocation}
-                            </span>
-                        )}
-                    </div>
-                )}
             </div>
 
             {/* Stat Cards Grid - or Compact Row for Suppliers */}
