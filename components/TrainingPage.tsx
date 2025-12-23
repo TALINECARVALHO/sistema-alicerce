@@ -188,28 +188,52 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ userRole }) => {
 
                     <ModuleCard
                         number="07"
-                        title="Dúvidas e Atualização de Dados"
-                        icon={<LockClosedIcon className="w-6 h-6" />}
+                        title="Tirando Dúvidas sobre Demandas"
+                        icon={<BellIcon className="w-6 h-6" />}
                     >
-                        <p>Precisa de ajuda ou quer atualizar seus dados cadastrais?</p>
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-3">
-                            <p className="font-bold text-blue-800 mb-2">❓ Dúvidas sobre o Sistema:</p>
-                            <p className="text-sm text-blue-700">
-                                Entre em contato com o <strong>Departamento de Contratações</strong> para esclarecer dúvidas sobre cotações, propostas ou funcionamento do sistema.
+                        <p>Tem dúvidas sobre uma cotação específica? Use o sistema de perguntas!</p>
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                            <p className="font-bold text-blue-800 mb-2">💬 Como Fazer Perguntas:</p>
+                            <ol className="list-decimal pl-5 space-y-2 text-blue-700 text-sm">
+                                <li>Acesse a demanda que você tem dúvida</li>
+                                <li>Clique na aba <strong>"Dúvidas"</strong></li>
+                                <li>Digite sua pergunta no campo de texto</li>
+                                <li>Clique em <strong>"Enviar Pergunta"</strong></li>
+                                <li>A Secretaria responderá em até 24h</li>
+                            </ol>
+                        </div>
+                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 mt-3">
+                            <p className="font-bold text-amber-800 mb-1 text-xs">⚠️ Importante:</p>
+                            <p className="text-xs text-amber-700">
+                                Use as perguntas para esclarecer detalhes técnicos, quantidades ou especificações dos itens solicitados.
                             </p>
                         </div>
+                    </ModuleCard>
+
+                    <ModuleCard
+                        number="08"
+                        title="Atualização de Dados Cadastrais"
+                        icon={<LockClosedIcon className="w-6 h-6" />}
+                    >
+                        <p>Precisa atualizar documentos, certificados ou informações da empresa?</p>
                         <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-                            <p className="font-bold text-green-800 mb-2">📝 Atualizar Dados Cadastrais:</p>
-                            <p className="text-sm text-green-700 mb-2">
-                                Para atualizar documentos, certificados ou informações da empresa:
-                            </p>
-                            <ol className="list-decimal pl-5 space-y-1 text-green-700 text-sm">
+                            <p className="font-bold text-green-800 mb-2">📝 Passo a Passo:</p>
+                            <ol className="list-decimal pl-5 space-y-2 text-green-700 text-sm">
                                 <li>Acesse o menu <strong>"Meus Dados"</strong></li>
                                 <li>Clique em <strong>"Editar Dados"</strong></li>
                                 <li>Atualize as informações necessárias</li>
                                 <li>Faça upload de novos documentos se necessário</li>
-                                <li>Salve as alterações</li>
+                                <li>Clique em <strong>"Salvar Alterações"</strong></li>
                             </ol>
+                        </div>
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-3">
+                            <p className="font-bold text-blue-800 mb-1 text-xs">📄 Documentos que você pode atualizar:</p>
+                            <ul className="text-xs text-blue-700 space-y-1">
+                                <li>• Certificado de Regularidade Fiscal</li>
+                                <li>• Alvará de Funcionamento</li>
+                                <li>• Certidões Negativas</li>
+                                <li>• Outros documentos com validade</li>
+                            </ul>
                         </div>
                     </ModuleCard>
                 </div>
