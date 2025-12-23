@@ -18,6 +18,7 @@ import {
     TagIcon,
     InformationCircleIcon,
     MagnifyingGlassIcon,
+    UsersIcon,
 } from './icons';
 
 export const FAQSection = () => {
@@ -440,8 +441,8 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                                                         <div
                                                                             key={idx}
                                                                             className={`p-3 rounded-lg border-2 transition-all ${isWinner
-                                                                                    ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-md'
-                                                                                    : 'bg-slate-50 border-slate-200'
+                                                                                ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-md'
+                                                                                : 'bg-slate-50 border-slate-200'
                                                                                 }`}
                                                                         >
                                                                             {isWinner && (
