@@ -811,35 +811,55 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
              */}
             {
                 !(userRole === UserRole.FORNECEDOR && demand.status === DemandStatus.AGUARDANDO_PROPOSTA && !supplierProposal && !demand.rejectionReason) && (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 space-y-6">
-                            {/* Description of Necessity */}
-                            {userRole !== UserRole.FORNECEDOR && demand.requestDescription && (
-                                <InfoCard title="Descrição da Necessidade">
-                                    <p className="text-slate-700 whitespace-pre-line leading-relaxed">{demand.requestDescription}</p>
-                                </InfoCard>
-                            )}
-
-                            {/* Items List */}
-                            {!(userRole === UserRole.FORNECEDOR && demand.status === DemandStatus.AGUARDANDO_PROPOSTA && !supplierProposal) && (
-                                <InfoCard title="Itens da Demanda">
-                                    <GroupedItems items={demand.items} groups={groups} winner={demand.winner} proposals={demand.proposals} />
-                                </InfoCard>
-                            )}
-                        </div>
-                        <div className="space-y-6">
-                            {/* Requester Data */}
-                            {userRole !== UserRole.FORNECEDOR && (
-                                <InfoCard title="Dados do Solicitante">
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-3"><div className="bg-slate-100 p-2 rounded-lg text-slate-400"><BuildingIcon className="w-5 h-5" /></div><div><p className="text-[10px] font-black uppercase text-slate-400">Secretaria</p><p className="font-bold text-slate-800">{demand.requestingDepartment}</p></div></div>
-
-                                        <div className="flex items-center gap-3"><div className="bg-slate-100 p-2 rounded-lg text-slate-400"><LocationMarkerIcon className="w-5 h-5" /></div><div><p className="text-[10px] font-black uppercase text-slate-400">Local de Entrega</p><p className="font-bold text-slate-800">{demand.deliveryLocation}</p></div></div>
+                    <div className="space-y-6">
+                        {/* Requester Data - Now at the top */}
+                        {userRole !== UserRole.FORNECEDOR && (
+                            <InfoCard title="Dados do Solicitante">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-slate-100 p-2 rounded-lg text-slate-400">
+                                            <BuildingIcon className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase text-slate-400">Secretaria</p>
+                                            <p className="font-bold text-slate-800">{demand.requestingDepartment}</p>
+                                        </div>
                                     </div>
-                                </InfoCard>
-                            )}
-                            {demand.rejectionReason && <div className="bg-red-50 p-6 rounded-xl border border-red-200 text-red-800"><h4 className="font-black text-xs uppercase mb-2">Motivo da Reprovação</h4><p className="text-sm italic">"{demand.rejectionReason}"</p></div>}
-                        </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-slate-100 p-2 rounded-lg text-slate-400">
+                                            <LocationMarkerIcon className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase text-slate-400">Local de Entrega</p>
+                                            <p className="font-bold text-slate-800">{demand.deliveryLocation}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </InfoCard>
+                        )}
+
+                        {/* Description of Necessity */}
+                        {userRole !== UserRole.FORNECEDOR && demand.requestDescription && (
+                            <InfoCard title="Descrição da Necessidade">
+                                <p className="text-slate-700 whitespace-pre-line leading-relaxed">{demand.requestDescription}</p>
+                            </InfoCard>
+                        )}
+
+                        {/* Items List */}
+                        {!(userRole === UserRole.FORNECEDOR && demand.status === DemandStatus.AGUARDANDO_PROPOSTA && !supplierProposal) && (
+                            <InfoCard title="Itens da Demanda">
+                                <GroupedItems items={demand.items} groups={groups} winner={demand.winner} proposals={demand.proposals} />
+                            </InfoCard>
+                        )}
+
+                        {/* Rejection Reason */}
+                        {demand.rejectionReason && (
+                            <div className="bg-red-50 p-6 rounded-xl border border-red-200 text-red-800">
+                                <h4 className="font-black text-xs uppercase mb-2">Motivo da Reprovação</h4>
+                                <p className="text-sm italic">"{demand.rejectionReason}"</p>
+                            </div>
+                        )}
                     </div>
                 )
             }
