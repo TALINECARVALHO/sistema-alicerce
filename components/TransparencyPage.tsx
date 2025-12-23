@@ -371,52 +371,118 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                     {filteredDemands.map(demand => {
                                         const statusColor = STATUS_COLORS[demand.status];
                                         const hasWinner = demand.status === DemandStatus.VENCEDOR_DEFINIDO || demand.status === DemandStatus.CONCLUIDA;
+                                        const validProposals = demand.proposals?.filter(p => !p.observations?.includes('DECLINED')) || [];
 
                                         return (
                                             <div
                                                 key={demand.id}
                                                 onClick={() => onSelectDemand && onSelectDemand(demand)}
-                                                className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer group relative overflow-hidden"
+                                                className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer group relative overflow-hidden"
                                             >
                                                 {/* Decorative gradient bar */}
                                                 <div className={`absolute left-0 top-0 bottom-0 w-1 ${hasWinner ? 'bg-gradient-to-b from-green-500 to-emerald-600' : 'bg-gradient-to-b from-blue-500 to-indigo-600'}`}></div>
 
-                                                <div className="flex flex-col lg:flex-row justify-between lg:items-start gap-4 pl-4">
-                                                    <div className="flex-1">
-                                                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                                                            <span className="bg-slate-100 text-slate-700 text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-200 font-bold">
-                                                                {demand.protocol}
-                                                            </span>
-                                                            <span className="text-xs text-slate-400 flex items-center gap-1">
-                                                                <ClockIcon className="w-3.5 h-3.5" />
-                                                                {new Date(demand.createdAt).toLocaleDateString('pt-BR')}
-                                                            </span>
-                                                            <span className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
-                                                                {demand.status}
-                                                            </span>
+                                                <div className="flex flex-col gap-4 pl-4 p-6">
+                                                    {/* Header Section */}
+                                                    <div className="flex flex-col lg:flex-row justify-between lg:items-start gap-4">
+                                                        <div className="flex-1">
+                                                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                                                                <span className="bg-slate-100 text-slate-700 text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-200 font-bold">
+                                                                    {demand.protocol}
+                                                                </span>
+                                                                <span className="text-xs text-slate-400 flex items-center gap-1">
+                                                                    <ClockIcon className="w-3.5 h-3.5" />
+                                                                    {new Date(demand.createdAt).toLocaleDateString('pt-BR')}
+                                                                </span>
+                                                                <span className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
+                                                                    {demand.status}
+                                                                </span>
+                                                            </div>
+
+                                                            <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors mb-2 leading-tight">
+                                                                {demand.title}
+                                                            </h3>
+
+                                                            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                                                                <div className="flex items-center gap-2">
+                                                                    <BuildingIcon className="w-4 h-4 text-slate-400" />
+                                                                    <span className="font-medium">{demand.requestingDepartment}</span>
+                                                                </div>
+                                                                {demand.items && demand.items.length > 0 && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <TagIcon className="w-4 h-4 text-slate-400" />
+                                                                        <span className="text-xs text-slate-500">{demand.items.length} {demand.items.length === 1 ? 'item' : 'itens'}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
 
-                                                        <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors mb-2 leading-tight">
-                                                            {demand.title}
-                                                        </h3>
-
-                                                        <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-                                                            <div className="flex items-center gap-2">
-                                                                <BuildingIcon className="w-4 h-4 text-slate-400" />
-                                                                <span className="font-medium">{demand.requestingDepartment}</span>
-                                                            </div>
-                                                            {demand.items && demand.items.length > 0 && (
-                                                                <div className="flex items-center gap-2">
-                                                                    <TagIcon className="w-4 h-4 text-slate-400" />
-                                                                    <span className="text-xs text-slate-500">{demand.items.length} {demand.items.length === 1 ? 'item' : 'itens'}</span>
-                                                                </div>
-                                                            )}
+                                                        <div className="hidden sm:flex h-12 w-12 bg-slate-100 rounded-full items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all group-hover:scale-110 flex-shrink-0">
+                                                            <span className="text-2xl">→</span>
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center gap-4 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-                                                        {demand.winner ? (
-                                                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 min-w-[200px]">
+                                                    {/* Proposals Section - Only show when there's a winner */}
+                                                    {hasWinner && validProposals.length > 0 && (
+                                                        <div className="border-t border-slate-200 pt-4 mt-2">
+                                                            <div className="flex items-center gap-2 mb-3">
+                                                                <UsersIcon className="w-4 h-4 text-slate-500" />
+                                                                <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                                                    Propostas Recebidas ({validProposals.length})
+                                                                </h4>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                {validProposals.map((proposal, idx) => {
+                                                                    const isWinner = proposal.supplierName === demand.winner?.supplierName;
+
+                                                                    return (
+                                                                        <div
+                                                                            key={idx}
+                                                                            className={`p-3 rounded-lg border-2 transition-all ${isWinner
+                                                                                    ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-md'
+                                                                                    : 'bg-slate-50 border-slate-200'
+                                                                                }`}
+                                                                        >
+                                                                            {isWinner && (
+                                                                                <div className="flex items-center gap-1 mb-2">
+                                                                                    <CheckCircleIcon className="w-3.5 h-3.5 text-green-600" />
+                                                                                    <span className="text-[9px] font-bold text-green-700 uppercase tracking-wider">Vencedor</span>
+                                                                                </div>
+                                                                            )}
+
+                                                                            <p className={`font-bold text-sm mb-1 ${isWinner ? 'text-green-900' : 'text-slate-700'}`}>
+                                                                                {proposal.supplierName}
+                                                                            </p>
+
+                                                                            <div className="space-y-1">
+                                                                                <div className="flex items-center justify-between">
+                                                                                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Valor:</span>
+                                                                                    <span className={`text-sm font-bold ${isWinner ? 'text-green-600' : 'text-slate-700'}`}>
+                                                                                        {proposal.totalValue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                {proposal.deliveryTime && (
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <span className="text-[10px] text-slate-500 uppercase font-semibold">Prazo:</span>
+                                                                                        <span className={`text-xs font-medium ${isWinner ? 'text-green-700' : 'text-slate-600'}`}>
+                                                                                            {proposal.deliveryTime}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Winner Only (when no proposals to show) */}
+                                                    {demand.winner && validProposals.length === 0 && (
+                                                        <div className="border-t border-slate-200 pt-4 mt-2">
+                                                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
                                                                 <div className="flex items-center gap-2 mb-2">
                                                                     <CheckCircleIcon className="w-4 h-4 text-green-600" />
                                                                     <p className="text-xs text-green-700 uppercase tracking-wider font-bold">Vencedor</p>
@@ -426,17 +492,18 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                                                     {demand.winner.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                                 </p>
                                                             </div>
-                                                        ) : (
+                                                        </div>
+                                                    )}
+
+                                                    {/* No Winner Yet */}
+                                                    {!demand.winner && (
+                                                        <div className="border-t border-slate-200 pt-4 mt-2">
                                                             <div className="text-center flex items-center gap-2 text-slate-400 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200">
                                                                 <InformationCircleIcon className="w-5 h-5" />
                                                                 <span className="text-xs font-medium">Aguardando definição</span>
                                                             </div>
-                                                        )}
-
-                                                        <div className="hidden sm:flex h-12 w-12 bg-slate-100 rounded-full items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all group-hover:scale-110">
-                                                            <span className="text-2xl">→</span>
                                                         </div>
-                                                    </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
