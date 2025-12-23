@@ -84,16 +84,15 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ userRole }) => {
                                 <li><strong>1.</strong> Secretaria cria demanda</li>
                                 <li><strong>2.</strong> Você recebe notificação por email</li>
                                 <li><strong>3.</strong> Envia sua proposta (preço + prazo)</li>
-                                <li><strong>4.</strong> Sistema ranqueia automaticamente</li>
-                                <li><strong>5.</strong> Melhor proposta vence</li>
+                                <li><strong>4.</strong> Prefeitura analisa as propostas</li>
+                                <li><strong>5.</strong> Proposta mais vantajosa vence</li>
                             </ol>
                         </div>
-                        <div className="bg-green-50 p-4 rounded-xl border border-green-100 mt-3">
-                            <p className="font-bold text-green-800 mb-2">🏆 Critérios de Seleção:</p>
-                            <ol className="space-y-1 text-green-700 text-sm">
-                                <li><strong>1º:</strong> Menor preço</li>
-                                <li><strong>2º:</strong> Menor prazo de entrega (em caso de empate)</li>
-                            </ol>
+                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 mt-3">
+                            <p className="font-bold text-amber-800 mb-2">⚖️ Critério de Seleção:</p>
+                            <p className="text-sm text-amber-700">
+                                A Prefeitura escolherá a <strong>proposta mais vantajosa</strong> conforme o caso, considerando <strong>preço e prazo de entrega</strong>. Nem sempre o menor preço vence - um prazo mais curto pode ser decisivo dependendo da urgência da demanda.
+                            </p>
                         </div>
                     </ModuleCard>
 
@@ -183,6 +182,33 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ userRole }) => {
                                 <li>Confirme disponibilidade do material</li>
                                 <li>Alinhe prazo e local de entrega</li>
                                 <li>Emita nota fiscal conforme solicitado</li>
+                            </ol>
+                        </div>
+                    </ModuleCard>
+
+                    <ModuleCard
+                        number="07"
+                        title="Dúvidas e Atualização de Dados"
+                        icon={<LockClosedIcon className="w-6 h-6" />}
+                    >
+                        <p>Precisa de ajuda ou quer atualizar seus dados cadastrais?</p>
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-3">
+                            <p className="font-bold text-blue-800 mb-2">❓ Dúvidas sobre o Sistema:</p>
+                            <p className="text-sm text-blue-700">
+                                Entre em contato com o <strong>Departamento de Contratações</strong> para esclarecer dúvidas sobre cotações, propostas ou funcionamento do sistema.
+                            </p>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                            <p className="font-bold text-green-800 mb-2">📝 Atualizar Dados Cadastrais:</p>
+                            <p className="text-sm text-green-700 mb-2">
+                                Para atualizar documentos, certificados ou informações da empresa:
+                            </p>
+                            <ol className="list-decimal pl-5 space-y-1 text-green-700 text-sm">
+                                <li>Acesse o menu <strong>"Meus Dados"</strong></li>
+                                <li>Clique em <strong>"Editar Dados"</strong></li>
+                                <li>Atualize as informações necessárias</li>
+                                <li>Faça upload de novos documentos se necessário</li>
+                                <li>Salve as alterações</li>
                             </ol>
                         </div>
                     </ModuleCard>
