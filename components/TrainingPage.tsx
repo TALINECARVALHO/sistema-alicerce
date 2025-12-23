@@ -226,15 +226,6 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ userRole }) => {
                                 <li>Clique em <strong>"Salvar Alterações"</strong></li>
                             </ol>
                         </div>
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-3">
-                            <p className="font-bold text-blue-800 mb-1 text-xs">📄 Documentos que você pode atualizar:</p>
-                            <ul className="text-xs text-blue-700 space-y-1">
-                                <li>• Certificado de Regularidade Fiscal</li>
-                                <li>• Alvará de Funcionamento</li>
-                                <li>• Certidões Negativas</li>
-                                <li>• Outros documentos com validade</li>
-                            </ul>
-                        </div>
                     </ModuleCard>
                 </div>
 
