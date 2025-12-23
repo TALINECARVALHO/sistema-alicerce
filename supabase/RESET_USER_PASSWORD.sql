@@ -1,5 +1,6 @@
 -- Função para resetar senha de usuário (apenas admins)
--- Esta função usa a extensão pgsodium para hash de senha
+-- Habilitar extensão pgcrypto se necessário
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE OR REPLACE FUNCTION reset_user_password(
     target_user_id UUID,
@@ -8,18 +9,13 @@ CREATE OR REPLACE FUNCTION reset_user_password(
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = auth, public, extensions
 AS $$
-DECLARE
-    result JSON;
 BEGIN
-    -- Verificar se o usuário que está chamando é admin
-    -- (você pode adicionar verificação de role aqui se necessário)
-    
-    -- Atualizar a senha do usuário
+    -- Atualizar a senha do usuário usando crypt do pgcrypto
     UPDATE auth.users
     SET 
-        encrypted_password = crypt(new_password, gen_salt('bf')),
+        encrypted_password = extensions.crypt(new_password, extensions.gen_salt('bf')),
         updated_at = NOW()
     WHERE id = target_user_id;
     
@@ -46,4 +42,5 @@ END;
 $$;
 
 -- Garantir que apenas usuários autenticados possam chamar esta função
--- (adicione RLS policies conforme necessário)
+GRANT EXECUTE ON FUNCTION reset_user_password TO authenticated;
+
