@@ -638,9 +638,22 @@ export const resetSystemUserPassword = async (userId: string, email: string, use
                 </div>
 
                 <div style="background-color: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; border-radius: 4px; margin: 20px 0;">
-                    <p style="margin: 0; color: #92400e; font-size: 14px;">
+                    <p style="margin: 0 0 10px 0; color: #92400e; font-size: 14px;">
                         <strong>⚠️ Importante:</strong> Por segurança, recomendamos que você altere esta senha após o primeiro login.
                     </p>
+                    <p style="margin: 0; color: #92400e; font-size: 13px; font-weight: bold;">
+                        📖 Como trocar sua senha:
+                    </p>
+                    <ol style="margin: 10px 0 0 0; padding-left: 20px; color: #92400e; font-size: 12px; line-height: 1.6;">
+                        <li>Faça login no sistema com a senha acima</li>
+                        <li>Clique no seu nome no canto superior direito</li>
+                        <li>Selecione <strong>"Configurações"</strong></li>
+                        <li>Na seção "Segurança", clique em <strong>"Alterar Senha"</strong></li>
+                        <li>Digite a senha atual (a que está neste email)</li>
+                        <li>Digite sua nova senha (mínimo 6 caracteres)</li>
+                        <li>Confirme a nova senha</li>
+                        <li>Clique em <strong>"Salvar"</strong></li>
+                    </ol>
                 </div>
 
                 <p style="color: #374151;">Acesse o sistema em: <a href="${window.location.origin}" style="color: #2563eb;">${window.location.origin}</a></p>
