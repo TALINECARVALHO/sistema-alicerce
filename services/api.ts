@@ -605,26 +605,43 @@ export const updateCurrentUserPassword = async (password: string) => {
 };
 
 export const resetSystemUserPassword = async (userId: string, email: string, userName: string): Promise<{ success: boolean; message: string }> => {
-    const newPassword = Math.random().toString(36).slice(-10) + 'A1!';
     try {
-        const { error } = await supabase.functions.invoke('reset-password', {
-            body: { userId, password: newPassword }
+        // Usar a API nativa do Supabase para enviar email de reset
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/reset-password`
         });
 
         if (error) throw error;
 
-        // Send Email
-        const { subject, html } = await getEmailContent('PASSWORD_RESET_ADMIN', {
-            '{{userName}}': userName,
-            '{{email}}': email,
-            '{{password}}': newPassword
-        });
+        // Enviar email de notificação adicional
+        const subject = 'Redefinição de Senha - Sistema Alicerce';
+        const html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #1e40af;">Redefinição de Senha</h2>
+                <p>Olá <strong>${userName}</strong>,</p>
+                <p>Um administrador solicitou a redefinição da sua senha no Sistema Alicerce.</p>
+                <p>Você receberá um email do Supabase com um link para redefinir sua senha.</p>
+                <p>Se você não solicitou esta alteração, entre em contato com o Departamento de Contratações imediatamente.</p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <p style="color: #6b7280; font-size: 12px;">
+                    Este é um email automático do Sistema Alicerce.<br>
+                    Prefeitura Municipal - Departamento de Contratações
+                </p>
+            </div>
+        `;
+
         await sendEmail(email, subject, html);
 
-        return { success: true, message: "Senha resetada e enviada por e-mail!" };
-    } catch (e: any) {
-        console.error("Erro ao resetar senha:", e);
-        return { success: false, message: "Erro ao processar reset de senha." };
+        return {
+            success: true,
+            message: `Email de redefinição de senha enviado para ${email}`
+        };
+    } catch (error: any) {
+        console.error('Erro ao resetar senha:', error);
+        return {
+            success: false,
+            message: error.message || 'Erro ao enviar email de redefinição'
+        };
     }
 };
 
