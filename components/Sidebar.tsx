@@ -82,7 +82,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProf
           { page: 'users', icon: <UsersIcon className="w-5 h-5" />, label: 'Usuários' },
           { page: 'suppliers', icon: <TruckIcon className="w-5 h-5" />, label: 'Fornecedores' },
           { page: 'settings', icon: <CogIcon className="w-5 h-5" />, label: 'Configurações' },
-          { page: 'trainings', icon: <SparklesIcon className="w-5 h-5" />, label: 'Manual & Treinamento' },
           { page: 'reports', icon: <ReportsIcon className="w-5 h-5" />, label: 'Relatórios' },
         ]
       }
@@ -100,12 +99,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProf
           { page: 'demands', icon: <ClipboardListIcon className="w-5 h-5" />, label: 'Demandas' },
           { page: 'suppliers', icon: <TruckIcon className="w-5 h-5" />, label: 'Fornecedores' },
           { page: 'qa', icon: <QAIcon className="w-5 h-5" />, label: 'Dúvidas & Respostas' },
-        ]
-      },
-      {
-        title: 'Aprendizado',
-        items: [
-          { page: 'training', icon: <SparklesIcon className="w-5 h-5" />, label: 'Manual de Treinamento' },
         ]
       },
       {
