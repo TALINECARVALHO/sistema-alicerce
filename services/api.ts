@@ -680,6 +680,72 @@ export const resetSystemUserPassword = async (userId: string, email: string, use
     }
 };
 
+export const requestPasswordReset = async (userEmail: string): Promise<{ success: boolean; message: string }> => {
+    try {
+        // Buscar o email do admin supremo
+        const { data: adminProfile } = await supabase
+            .from('profiles')
+            .select('email, full_name')
+            .eq('role', UserRole.GESTOR_SUPREMO)
+            .single();
+
+        if (!adminProfile?.email) {
+            throw new Error('Admin não encontrado');
+        }
+
+        // Enviar email para o admin
+        const subject = 'Solicitação de Reset de Senha - Sistema Alicerce';
+        const html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc2626;">Solicitação de Reset de Senha</h2>
+                <p>Olá <strong>${adminProfile.full_name}</strong>,</p>
+                <p>Um usuário solicitou a redefinição de senha no Sistema Alicerce.</p>
+                
+                <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0; color: #374151; font-size: 14px;"><strong>Dados do solicitante:</strong></p>
+                    <p style="margin: 10px 0 0 0; color: #374151;">
+                        <strong>Email:</strong> ${userEmail}
+                    </p>
+                </div>
+
+                <div style="background-color: #dbeafe; padding: 15px; border-left: 4px solid #2563eb; border-radius: 4px; margin: 20px 0;">
+                    <p style="margin: 0; color: #1e40af; font-size: 14px;">
+                        <strong>📋 Ação necessária:</strong>
+                    </p>
+                    <ol style="margin: 10px 0 0 0; padding-left: 20px; color: #1e40af; font-size: 13px; line-height: 1.6;">
+                        <li>Acesse o Sistema Alicerce</li>
+                        <li>Vá em <strong>Configurações → Usuários</strong></li>
+                        <li>Localize o usuário <strong>${userEmail}</strong></li>
+                        <li>Clique em <strong>"Resetar Senha"</strong></li>
+                        <li>Uma nova senha será gerada e enviada automaticamente para o usuário</li>
+                    </ol>
+                </div>
+
+                <p style="color: #374151;">Acesse o sistema em: <a href="${window.location.origin}" style="color: #2563eb;">${window.location.origin}</a></p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <p style="color: #6b7280; font-size: 12px;">
+                    Este é um email automático do Sistema Alicerce.<br>
+                    Prefeitura Municipal - Departamento de Contratações
+                </p>
+            </div>
+        `;
+
+        await sendEmail(adminProfile.email, subject, html);
+
+        return {
+            success: true,
+            message: 'Solicitação enviada ao administrador'
+        };
+    } catch (error: any) {
+        console.error('Erro ao solicitar reset:', error);
+        return {
+            success: false,
+            message: error.message || 'Erro ao enviar solicitação'
+        };
+    }
+};
+
 export const approveSupplierWorkflow = async (supplier: Supplier): Promise<{ success: boolean; message: string }> => {
     const tempPass = Math.random().toString(36).slice(-10) + 'A1!';
     try {

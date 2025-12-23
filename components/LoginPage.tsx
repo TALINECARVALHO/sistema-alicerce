@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../services/supabase';
+import * as api from '../services/api';
 import { MailIcon, LockClosedIcon, AlicerceIcon, BackIcon, ChartBarIcon } from './icons';
 
 interface LoginPageProps {
@@ -40,13 +41,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onBack, onPublicAccess, title = "
         setLoading(true);
         setError(null);
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin, // Redirect back to app
-            });
-            if (error) throw error;
+            const result = await api.requestPasswordReset(email);
+            if (!result.success) {
+                throw new Error(result.message);
+            }
             setRecoverySent(true);
         } catch (error: any) {
-            setError(error.message || 'Erro ao enviar e-mail de recuperação.');
+            setError(error.message || 'Erro ao enviar solicitação de recuperação.');
         } finally {
             setLoading(false);
         }
@@ -64,23 +65,72 @@ const LoginPage: React.FC<LoginPageProps> = ({ onBack, onPublicAccess, title = "
                         <p className="mt-1 text-blue-200 text-sm font-medium">Sistema Alicerce</p>
                     </div>
 
-                    <div className="px-8 py-8 bg-white text-center">
-                        <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 mb-6">
-                            <h3 className="text-blue-900 font-bold mb-2">Contato Administrativo</h3>
-                            <p className="text-sm text-blue-700 leading-relaxed">
-                                Por medidas de segurança, a redefinição de senha deve ser realizada por um administrador do sistema.
-                            </p>
-                            <p className="text-sm text-blue-700 mt-4">
-                                Entre em contato com o Departamento de Contratações para solicitar suas novas credenciais.
-                            </p>
-                        </div>
+                    <div className="px-8 py-8 bg-white">
+                        {recoverySent ? (
+                            <div className="text-center">
+                                <div className="bg-green-50 p-6 rounded-xl border border-green-100 mb-6">
+                                    <h3 className="text-green-900 font-bold mb-2">✅ Solicitação Enviada!</h3>
+                                    <p className="text-sm text-green-700 leading-relaxed">
+                                        Sua solicitação de reset de senha foi enviada ao administrador do sistema.
+                                    </p>
+                                    <p className="text-sm text-green-700 mt-4">
+                                        Você receberá um email com suas novas credenciais em breve.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => { setShowRecovery(false); setRecoverySent(false); }}
+                                    className="w-full py-2.5 px-4 border border-slate-300 rounded-lg shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all"
+                                >
+                                    Voltar para Login
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 mb-6">
+                                    <h3 className="text-blue-900 font-bold mb-2">Esqueceu sua senha?</h3>
+                                    <p className="text-sm text-blue-700 leading-relaxed">
+                                        Digite seu email abaixo. Enviaremos uma solicitação ao administrador para resetar sua senha.
+                                    </p>
+                                </div>
 
-                        <button
-                            onClick={() => setShowRecovery(false)}
-                            className="w-full py-2.5 px-4 border border-slate-300 rounded-lg shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all"
-                        >
-                            Voltar para Login
-                        </button>
+                                <form onSubmit={handleRecovery} className="space-y-4">
+                                    <div>
+                                        <label htmlFor="recovery-email" className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Email</label>
+                                        <input
+                                            id="recovery-email"
+                                            type="email"
+                                            required
+                                            className="block w-full rounded-lg border-slate-300 focus:border-blue-500 focus:ring-blue-500 py-2.5 text-slate-900 placeholder-slate-400 sm:text-sm"
+                                            placeholder="seu@email.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {error && (
+                                        <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded-r-md">
+                                            <p className="text-xs text-red-700">{error}</p>
+                                        </div>
+                                    )}
+
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg shadow-sm text-sm font-bold hover:bg-blue-700 disabled:bg-blue-400 transition-all"
+                                    >
+                                        {loading ? 'Enviando...' : 'Solicitar Reset de Senha'}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowRecovery(false)}
+                                        className="w-full py-2.5 px-4 border border-slate-300 rounded-lg shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-all"
+                                    >
+                                        Voltar para Login
+                                    </button>
+                                </form>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
