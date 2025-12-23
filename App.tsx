@@ -639,7 +639,7 @@ export const AppContent: React.FC = () => {
                         }}
                     />
                 );
-            case 'training': return <TrainingPage />;
+            case 'training': return <TrainingPage userRole={userProfile.role as UserRole} />;
             case 'supplier_data':
                 return <SupplierData supplier={currentSupplier!} groups={groups} onUpdateSupplier={async (s, files) => { await api.updateSupplier(s, files); loadAuthenticatedData(); }} />;
             case 'supplier_reports':
