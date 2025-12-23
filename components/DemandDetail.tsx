@@ -40,30 +40,92 @@ const InfoCard: React.FC<{ title: string; children: React.ReactNode, className?:
     </div>
 );
 
-const ItemsTable: React.FC<{ items: Demand['items'] }> = ({ items }) => (
-    <div className="overflow-x-auto">
-        <table className="min-w-full bg-white">
-            <thead className="bg-slate-50">
-                <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Descrição</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Unidade</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Quantidade</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200/80">
-                {items.map(item => (
-                    <tr key={item.id || Math.random()} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{item.description}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{item.unit}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 text-right">{item.quantity}</td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
-);
+const ItemsTable: React.FC<{ items: Demand['items'], winner?: Demand['winner'], proposals?: Demand['proposals'] }> = ({ items, winner, proposals }) => {
+    const hasWinner = !!winner;
 
-const GroupedItems: React.FC<{ items: Demand['items'], groups: Group[] }> = ({ items, groups }) => {
+    // Build price map for items
+    const itemPriceMap = new Map<number, { unitPrice: number; deliveryTime: string }>();
+
+    if (hasWinner && winner.items && winner.items.length > 0) {
+        // Item mode - get prices from winner items
+        winner.items.forEach((i: any) => {
+            const winningProposal = proposals?.find(p => p.supplierName === i.supplierName);
+            itemPriceMap.set(
+                Number(i.itemId || i.item_id),
+                {
+                    unitPrice: i.unitPrice,
+                    deliveryTime: winningProposal?.deliveryTime || 'Conforme edital'
+                }
+            );
+        });
+    } else if (hasWinner && winner.supplierName) {
+        // Global mode - get prices from winning proposal
+        const winningProposal = proposals?.find(p => p.supplierName === winner.supplierName);
+        if (winningProposal?.items) {
+            winningProposal.items.forEach((i: any) => {
+                itemPriceMap.set(
+                    Number(i.itemId || i.item_id),
+                    {
+                        unitPrice: i.unitPrice,
+                        deliveryTime: winningProposal.deliveryTime || 'Conforme edital'
+                    }
+                );
+            });
+        }
+    }
+
+    return (
+        <div className="overflow-x-auto">
+            <table className="min-w-full bg-white">
+                <thead className="bg-slate-50">
+                    <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Descrição</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Unidade</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Quantidade</th>
+                        {hasWinner && (
+                            <>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Valor Unit.</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Valor Total</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Prazo</th>
+                            </>
+                        )}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200/80">
+                    {items.map(item => {
+                        const priceInfo = itemPriceMap.get(item.id);
+                        const unitPrice = priceInfo?.unitPrice || 0;
+                        const totalPrice = unitPrice * item.quantity;
+                        const deliveryTime = priceInfo?.deliveryTime || '-';
+
+                        return (
+                            <tr key={item.id || Math.random()} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{item.description}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{item.unit}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 text-right">{item.quantity}</td>
+                                {hasWinner && (
+                                    <>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600 text-right">
+                                            {unitPrice > 0 ? unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-700 text-right">
+                                            {totalPrice > 0 ? totalPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                                            {deliveryTime}
+                                        </td>
+                                    </>
+                                )}
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+const GroupedItems: React.FC<{ items: Demand['items'], groups: Group[], winner?: Demand['winner'], proposals?: Demand['proposals'] }> = ({ items, groups, winner, proposals }) => {
     const itemsByGroup = useMemo(() => {
         const grouped: { [key: string]: Demand['items'] } = {};
         for (const item of items) {
@@ -76,7 +138,7 @@ const GroupedItems: React.FC<{ items: Demand['items'], groups: Group[] }> = ({ i
         <div className="space-y-6">
             {itemsByGroup.map(([groupId, groupItems]) => {
                 const group = groups.find(g => g.id === groupId);
-                return (<div key={groupId} className="overflow-hidden rounded-xl border border-slate-200/80"><h4 className="text-md font-semibold text-slate-800 bg-slate-100 p-4 border-b border-slate-200/80">Grupo: {group?.name || groupId}</h4><ItemsTable items={groupItems} /></div>);
+                return (<div key={groupId} className="overflow-hidden rounded-xl border border-slate-200/80"><h4 className="text-md font-semibold text-slate-800 bg-slate-100 p-4 border-b border-slate-200/80">Grupo: {group?.name || groupId}</h4><ItemsTable items={groupItems} winner={winner} proposals={proposals} /></div>);
             })}
         </div>
     );
@@ -761,7 +823,7 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                             {/* Items List */}
                             {!(userRole === UserRole.FORNECEDOR && demand.status === DemandStatus.AGUARDANDO_PROPOSTA && !supplierProposal) && (
                                 <InfoCard title="Itens da Demanda">
-                                    <GroupedItems items={demand.items} groups={groups} />
+                                    <GroupedItems items={demand.items} groups={groups} winner={demand.winner} proposals={demand.proposals} />
                                 </InfoCard>
                             )}
                         </div>
