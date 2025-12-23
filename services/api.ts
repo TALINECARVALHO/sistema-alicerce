@@ -609,12 +609,17 @@ export const resetSystemUserPassword = async (userId: string, email: string, use
     const newPassword = Math.random().toString(36).slice(-10) + 'A1!';
 
     try {
-        // Atualizar senha do usuário via Admin API
-        const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
-            password: newPassword
+        // Atualizar senha do usuário via RPC
+        const { data, error: rpcError } = await supabase.rpc('reset_user_password', {
+            target_user_id: userId,
+            new_password: newPassword
         });
 
-        if (updateError) throw updateError;
+        if (rpcError) throw rpcError;
+
+        if (data && !data.success) {
+            throw new Error(data.message || 'Erro ao resetar senha');
+        }
 
         // Enviar email com a nova senha
         const subject = 'Nova Senha - Sistema Alicerce';
