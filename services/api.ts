@@ -605,23 +605,41 @@ export const updateCurrentUserPassword = async (password: string) => {
 };
 
 export const resetSystemUserPassword = async (userId: string, email: string, userName: string): Promise<{ success: boolean; message: string }> => {
+    // Gerar senha aleatória
+    const newPassword = Math.random().toString(36).slice(-10) + 'A1!';
+
     try {
-        // Usar a API nativa do Supabase para enviar email de reset
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}/reset-password`
+        // Atualizar senha do usuário via Admin API
+        const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+            password: newPassword
         });
 
-        if (error) throw error;
+        if (updateError) throw updateError;
 
-        // Enviar email de notificação adicional
-        const subject = 'Redefinição de Senha - Sistema Alicerce';
+        // Enviar email com a nova senha
+        const subject = 'Nova Senha - Sistema Alicerce';
         const html = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #1e40af;">Redefinição de Senha</h2>
+                <h2 style="color: #1e40af;">Senha Redefinida com Sucesso</h2>
                 <p>Olá <strong>${userName}</strong>,</p>
-                <p>Um administrador solicitou a redefinição da sua senha no Sistema Alicerce.</p>
-                <p>Você receberá um email do Supabase com um link para redefinir sua senha.</p>
-                <p>Se você não solicitou esta alteração, entre em contato com o Departamento de Contratações imediatamente.</p>
+                <p>Um administrador redefiniu sua senha no Sistema Alicerce.</p>
+                
+                <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0; color: #374151; font-size: 14px;"><strong>Suas novas credenciais:</strong></p>
+                    <p style="margin: 10px 0 0 0; color: #374151;">
+                        <strong>Email:</strong> ${email}<br>
+                        <strong>Senha:</strong> <span style="background-color: #dbeafe; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 16px;">${newPassword}</span>
+                    </p>
+                </div>
+
+                <div style="background-color: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; border-radius: 4px; margin: 20px 0;">
+                    <p style="margin: 0; color: #92400e; font-size: 14px;">
+                        <strong>⚠️ Importante:</strong> Por segurança, recomendamos que você altere esta senha após o primeiro login.
+                    </p>
+                </div>
+
+                <p style="color: #374151;">Acesse o sistema em: <a href="${window.location.origin}" style="color: #2563eb;">${window.location.origin}</a></p>
+
                 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
                 <p style="color: #6b7280; font-size: 12px;">
                     Este é um email automático do Sistema Alicerce.<br>
@@ -634,13 +652,13 @@ export const resetSystemUserPassword = async (userId: string, email: string, use
 
         return {
             success: true,
-            message: `Email de redefinição de senha enviado para ${email}`
+            message: `Nova senha gerada e enviada para ${email}`
         };
     } catch (error: any) {
         console.error('Erro ao resetar senha:', error);
         return {
             success: false,
-            message: error.message || 'Erro ao enviar email de redefinição'
+            message: error.message || 'Erro ao resetar senha'
         };
     }
 };
