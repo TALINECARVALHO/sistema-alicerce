@@ -83,9 +83,16 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ userRole }) => {
                             <ol className="space-y-2 text-blue-700 text-sm">
                                 <li><strong>1.</strong> Secretaria cria demanda</li>
                                 <li><strong>2.</strong> Você recebe notificação por email</li>
-                                <li><strong>3.</strong> Envia sua proposta de preço</li>
+                                <li><strong>3.</strong> Envia sua proposta (preço + prazo)</li>
                                 <li><strong>4.</strong> Sistema ranqueia automaticamente</li>
-                                <li><strong>5.</strong> Melhor preço vence</li>
+                                <li><strong>5.</strong> Melhor proposta vence</li>
+                            </ol>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-xl border border-green-100 mt-3">
+                            <p className="font-bold text-green-800 mb-2">🏆 Critérios de Seleção:</p>
+                            <ol className="space-y-1 text-green-700 text-sm">
+                                <li><strong>1º:</strong> Menor preço</li>
+                                <li><strong>2º:</strong> Menor prazo de entrega (em caso de empate)</li>
                             </ol>
                         </div>
                     </ModuleCard>
