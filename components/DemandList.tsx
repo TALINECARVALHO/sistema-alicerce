@@ -194,7 +194,7 @@ const DemandTable: React.FC<{ demands: Demand[]; userRole: UserRole; onSelect: (
     );
 };
 
-type ManagerTab = 'rascunhos' | 'em_cotacao' | 'em_analise' | 'com_vencedor' | 'encerrada' | 'todas';
+type ManagerTab = 'rascunhos' | 'pendente_almoxarifado' | 'em_cotacao' | 'em_analise' | 'com_vencedor' | 'encerrada' | 'todas';
 
 const DemandList: React.FC<DemandListProps> = ({ groups, suppliers, userRole, onSelectDemand, onNewDemand, currentSupplier, userDepartment }) => {
     const { success, error: toastError } = useToast();
@@ -233,8 +233,9 @@ const DemandList: React.FC<DemandListProps> = ({ groups, suppliers, userRole, on
 
     const supplierGroupIds = useMemo(() => {
         if (!currentSupplier || !groups) return undefined;
+        if (!currentSupplier || !groups) return undefined;
         return groups
-            .filter(g => currentSupplier.groups.includes(g.name))
+            .filter(g => (currentSupplier.groups || []).includes(g.name))
             .map(g => g.id);
     }, [currentSupplier, groups]);
 
@@ -269,6 +270,7 @@ const DemandList: React.FC<DemandListProps> = ({ groups, suppliers, userRole, on
             } else if (!isSupplier) {
                 switch (managerTab) {
                     case 'rascunhos': statusFilter = DemandStatus.RASCUNHO; break;
+                    case 'pendente_almoxarifado': statusFilter = DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO; break;
                     case 'em_cotacao': statusFilter = DemandStatus.AGUARDANDO_PROPOSTA; break;
                     case 'em_analise': statusFilter = DemandStatus.EM_ANALISE; break;
                     case 'com_vencedor': statusFilter = DemandStatus.VENCEDOR_DEFINIDO; break;
@@ -347,7 +349,7 @@ const DemandList: React.FC<DemandListProps> = ({ groups, suppliers, userRole, on
                 subtitle={userRole === UserRole.ALMOXARIFADO ? "Validação técnica de pedidos internos" : isSupplier ? "Cotações abertas para sua área de atuação" : "Gestão centralizada do ciclo de compras"}
                 buttonText="Registrar Demanda"
                 onButtonClick={onNewDemand}
-                showButton={[UserRole.SECRETARIA, UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO].includes(userRole)}
+                showButton={[UserRole.SECRETARIA, UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO, UserRole.ALMOXARIFADO].includes(userRole)}
             />
 
             <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
@@ -363,6 +365,7 @@ const DemandList: React.FC<DemandListProps> = ({ groups, suppliers, userRole, on
                         <>
                             <TabItem onClick={() => { setManagerTab('todas'); setPage(1); }} isActive={managerTab === 'todas'} label="Todas" icon={<ClipboardListIcon className="w-4 h-4" />} />
                             <TabItem onClick={() => { setManagerTab('rascunhos'); setPage(1); }} isActive={managerTab === 'rascunhos'} label="Rascunhos" icon={<FileIcon className="w-4 h-4" />} />
+                            <TabItem onClick={() => { setManagerTab('pendente_almoxarifado'); setPage(1); }} isActive={managerTab === 'pendente_almoxarifado'} label="Pendente Almoxarifado" icon={<ShieldCheckIcon className="w-4 h-4" />} />
                             <TabItem onClick={() => { setManagerTab('em_cotacao'); setPage(1); }} isActive={managerTab === 'em_cotacao'} label="Em Cotação" icon={<ClockIcon className="w-4 h-4" />} />
                             <TabItem onClick={() => { setManagerTab('em_analise'); setPage(1); }} isActive={managerTab === 'em_analise'} label="Em Análise" icon={<ChartBarIcon className="w-4 h-4" />} />
                             <TabItem onClick={() => { setManagerTab('com_vencedor'); setPage(1); }} isActive={managerTab === 'com_vencedor'} label="Vencedor Definido" icon={<CheckCircleIcon className="w-4 h-4" />} />

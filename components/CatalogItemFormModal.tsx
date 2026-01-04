@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CatalogItem, Group } from '../types';
+import { CatalogItem, Group, UnitOfMeasure } from '../types';
 import Modal from './Modal';
 import { UNITS_OF_MEASURE } from '../constants';
 
 interface CatalogItemFormModalProps {
     item: CatalogItem | null;
     groups: Group[];
+    units?: UnitOfMeasure[];
     onClose: () => void;
     onSave: (item: any) => void;
 }
 
-const CatalogItemFormModal: React.FC<CatalogItemFormModalProps> = ({ item, groups, onClose, onSave }) => {
+const CatalogItemFormModal: React.FC<CatalogItemFormModalProps> = ({ item, groups, units, onClose, onSave }) => {
     const [name, setName] = useState('');
     const [unit, setUnit] = useState('');
     const [type, setType] = useState<'Material' | 'Serviço'>('Material');
@@ -84,9 +85,9 @@ const CatalogItemFormModal: React.FC<CatalogItemFormModalProps> = ({ item, group
     };
 
     const filteredGroups = useMemo(() => {
-        // Now allows selecting ANY active group regardless of type to prevent "hiding" groups.
-        return groups.filter(g => g.isActive);
-    }, [groups]);
+        const groupDescriptionPrefix = type === 'Material' ? 'Materiais' : 'Serviços';
+        return groups.filter(g => g.isActive && g.description.startsWith(groupDescriptionPrefix));
+    }, [groups, type]);
 
     return (
         <Modal isOpen={true} onClose={onClose} title={isEditing ? `Editar Item: ${item.name}` : 'Criar Novo Item de Catálogo'}>
@@ -130,7 +131,10 @@ const CatalogItemFormModal: React.FC<CatalogItemFormModalProps> = ({ item, group
                         required
                     />
                     <datalist id="units-datalist">
-                        {UNITS_OF_MEASURE.map(uom => <option key={uom} value={uom} />)}
+                        {units && units.length > 0
+                            ? units.filter(u => u.active).map(u => <option key={u.id} value={u.symbol}>{u.name}</option>)
+                            : UNITS_OF_MEASURE.map(uom => <option key={uom} value={uom} />)
+                        }
                     </datalist>
                 </div>
                 <fieldset className="pt-2">

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Demand, Supplier, Group, DemandStatus } from '../types';
 import PageHeader from './PageHeader';
 import { jsPDF } from 'jspdf';
@@ -19,7 +19,10 @@ import {
     InformationCircleIcon,
     MagnifyingGlassIcon,
     UsersIcon,
+    ChatIcon,
 } from './icons';
+import { Pagination } from './Pagination';
+import { formatDeliveryTime } from '../utils/delivery';
 
 export const FAQSection = () => {
     const faqs = [
@@ -96,6 +99,9 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
     const [selectedStatus, setSelectedStatus] = useState<string>('');
     const [selectedDepartment, setSelectedDepartment] = useState<string>('');
     const [isExporting, setIsExporting] = useState(false);
+    const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 12;
 
     const availableDepartments = useMemo(() => {
         const unique = new Set(demands.map(d => d.requestingDepartment).filter(Boolean));
@@ -109,6 +115,8 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
         // Security / Public View Enforcement
         if (isPublic) {
             results = results.filter(d =>
+                d.status === DemandStatus.AGUARDANDO_PROPOSTA ||
+                d.status === DemandStatus.EM_ANALISE ||
                 d.status === DemandStatus.VENCEDOR_DEFINIDO ||
                 d.status === DemandStatus.CONCLUIDA
             );
@@ -142,6 +150,29 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
             return matchesSearch && isActive;
         }).sort((a, b) => a.name.localeCompare(b.name));
     }, [suppliers, searchTerm, isPublic]);
+
+    // Pagination logic
+    const paginatedDemands = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return filteredDemands.slice(startIndex, endIndex);
+    }, [filteredDemands, currentPage]);
+
+    const paginatedSuppliers = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return filteredSuppliers.slice(startIndex, endIndex);
+    }, [filteredSuppliers, currentPage]);
+
+    const totalPages = useMemo(() => {
+        const total = activeTab === 'demands' ? filteredDemands.length : filteredSuppliers.length;
+        return Math.ceil(total / itemsPerPage);
+    }, [activeTab, filteredDemands.length, filteredSuppliers.length]);
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, selectedStatus, selectedDepartment, activeTab]);
 
     const handleExportPDF = () => {
         setIsExporting(true);
@@ -233,7 +264,7 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                 </div>
                                 <div>
                                     <p className="text-2xl font-bold text-white">{stats.totalDemands}</p>
-                                    <p className="text-xs text-blue-200">Demandas</p>
+                                    <p className="text-xs text-blue-200">Total de Demandas</p>
                                 </div>
                             </div>
                         </div>
@@ -245,7 +276,7 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                 </div>
                                 <div>
                                     <p className="text-2xl font-bold text-white">{stats.completedDemands}</p>
-                                    <p className="text-xs text-green-200">Concluídas</p>
+                                    <p className="text-xs text-green-200">Demanda Homologada</p>
                                 </div>
                             </div>
                         </div>
@@ -257,7 +288,7 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                 </div>
                                 <div>
                                     <p className="text-2xl font-bold text-white">{stats.totalSuppliers}</p>
-                                    <p className="text-xs text-indigo-200">Fornecedores</p>
+                                    <p className="text-xs text-indigo-200">Fornecedores Cadastrados</p>
                                 </div>
                             </div>
                         </div>
@@ -269,9 +300,9 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                 </div>
                                 <div>
                                     <p className="text-2xl font-bold text-white">
-                                        {stats.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                        {stats.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                     </p>
-                                    <p className="text-xs text-emerald-200">Valor Total</p>
+                                    <p className="text-xs text-emerald-200">Valor Total Homologado</p>
                                 </div>
                             </div>
                         </div>
@@ -280,8 +311,8 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
             </div>
 
             {/* Main Content Area */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10">
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden min-h-[600px] border border-slate-100">
+            <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-12 -mt-10 relative z-10">
+                <div className="bg-white rounded-3xl shadow-2xl overflow-hidden min-h-[600px] border border-slate-100">
                     {/* Navigation Tabs */}
                     <div className="flex border-b border-slate-200 bg-slate-50/50">
                         <button
@@ -330,7 +361,15 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                                 className="w-full pl-4 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none text-sm font-medium text-slate-600 cursor-pointer hover:bg-slate-100 transition-colors"
                                             >
                                                 <option value="">Status: Todos</option>
-                                                {Object.values(DemandStatus).filter(s => isPublic ? s !== DemandStatus.RASCUNHO : true).map(s => (
+                                                {Object.values(DemandStatus).filter(s => {
+                                                    if (isPublic) {
+                                                        return s === DemandStatus.AGUARDANDO_PROPOSTA ||
+                                                            s === DemandStatus.EM_ANALISE ||
+                                                            s === DemandStatus.VENCEDOR_DEFINIDO ||
+                                                            s === DemandStatus.CONCLUIDA;
+                                                    }
+                                                    return true;
+                                                }).map(s => (
                                                     <option key={s} value={s}>{s}</option>
                                                 ))}
                                             </select>
@@ -353,163 +392,314 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                 )}
                             </div>
 
-                            <button
-                                onClick={handleExportPDF}
-                                disabled={isExporting}
-                                className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 font-medium whitespace-nowrap"
-                            >
-                                <DownloadIcon className="w-5 h-5" />
-                                {isExporting ? 'Gerando PDF...' : 'Baixar Relatório'}
-                            </button>
+                            <div className="flex gap-2">
+                                {/* View Mode Toggle */}
+                                {activeTab === 'demands' && (
+                                    <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+                                        <button
+                                            onClick={() => setViewMode('table')}
+                                            title="Visualização em Tabela"
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'table'
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                                }`}
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode('cards')}
+                                            title="Visualização em Cards"
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'cards'
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                                }`}
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={handleExportPDF}
+                                    disabled={isExporting}
+                                    className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 font-medium whitespace-nowrap"
+                                >
+                                    <DownloadIcon className="w-5 h-5" />
+                                    {isExporting ? 'Gerando PDF...' : 'Baixar Relatório'}
+                                </button>
+                            </div>
                         </div>
                     </div>
 
                     {/* Results Content */}
-                    <div className="p-6 bg-slate-50/50 min-h-[400px]">
+                    <div className="bg-slate-50/50">
+                        {/* Top Pagination */}
+                        {totalPages > 1 && (
+                            <div className="border-b border-slate-100">
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    onPageChange={setCurrentPage}
+                                    totalItems={activeTab === 'demands' ? filteredDemands.length : filteredSuppliers.length}
+                                    itemsPerPage={itemsPerPage}
+                                />
+                            </div>
+                        )}
+
                         {activeTab === 'demands' ? (
-                            filteredDemands.length > 0 ? (
-                                <div className="grid gap-4">
-                                    {filteredDemands.map(demand => {
-                                        const statusColor = STATUS_COLORS[demand.status];
-                                        const hasWinner = demand.status === DemandStatus.VENCEDOR_DEFINIDO || demand.status === DemandStatus.CONCLUIDA;
-                                        const validProposals = demand.proposals?.filter(p => !p.observations?.includes('DECLINED')) || [];
-
-                                        return (
-                                            <div
-                                                key={demand.id}
-                                                onClick={() => onSelectDemand && onSelectDemand(demand)}
-                                                className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer group relative overflow-hidden"
-                                            >
-                                                {/* Decorative gradient bar */}
-                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${hasWinner ? 'bg-gradient-to-b from-green-500 to-emerald-600' : 'bg-gradient-to-b from-blue-500 to-indigo-600'}`}></div>
-
-                                                <div className="flex flex-col gap-4 pl-4 p-6">
-                                                    {/* Header Section */}
-                                                    <div className="flex flex-col lg:flex-row justify-between lg:items-start gap-4">
-                                                        <div className="flex-1">
-                                                            <div className="flex flex-wrap items-center gap-2 mb-3">
-                                                                <span className="bg-slate-100 text-slate-700 text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-200 font-bold">
-                                                                    {demand.protocol}
-                                                                </span>
-                                                                <span className="text-xs text-slate-400 flex items-center gap-1">
-                                                                    <ClockIcon className="w-3.5 h-3.5" />
+                            paginatedDemands.length > 0 ? (
+                                <>
+                                    {viewMode === 'table' ? (
+                                        /* Table View */
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead className="bg-slate-100 border-b-2 border-slate-200">
+                                                    <tr>
+                                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Protocolo</th>
+                                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Data</th>
+                                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Objeto</th>
+                                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Secretaria</th>
+                                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
+                                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Dúvidas</th>
+                                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Vencedor</th>
+                                                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Valor</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-slate-100">
+                                                    {paginatedDemands.map(demand => {
+                                                        const statusColor = STATUS_COLORS[demand.status];
+                                                        return (
+                                                            <tr
+                                                                key={demand.id}
+                                                                onClick={() => onSelectDemand && onSelectDemand(demand)}
+                                                                className="hover:bg-blue-50 cursor-pointer transition-colors"
+                                                            >
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                                                        {demand.protocol}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
                                                                     {new Date(demand.createdAt).toLocaleDateString('pt-BR')}
-                                                                </span>
-                                                                <span className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
-                                                                    {demand.status}
-                                                                </span>
-                                                            </div>
-
-                                                            <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors mb-2 leading-tight">
-                                                                {demand.title}
-                                                            </h3>
-
-                                                            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-                                                                <div className="flex items-center gap-2">
-                                                                    <BuildingIcon className="w-4 h-4 text-slate-400" />
-                                                                    <span className="font-medium">{demand.requestingDepartment}</span>
-                                                                </div>
-                                                                {demand.items && demand.items.length > 0 && (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <TagIcon className="w-4 h-4 text-slate-400" />
-                                                                        <span className="text-xs text-slate-500">{demand.items.length} {demand.items.length === 1 ? 'item' : 'itens'}</span>
+                                                                </td>
+                                                                <td className="px-6 py-4">
+                                                                    <div className="max-w-md">
+                                                                        <p className="text-sm font-semibold text-slate-900 line-clamp-2">{demand.title}</p>
+                                                                        {demand.items && demand.items.length > 0 && (
+                                                                            <p className="text-xs text-slate-500 mt-1">{demand.items.length} {demand.items.length === 1 ? 'item' : 'itens'}</p>
+                                                                        )}
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                                                </td>
+                                                                <td className="px-6 py-4 text-sm text-slate-700">
+                                                                    <div className="max-w-xs line-clamp-2">
+                                                                        {demand.requestingDepartment}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full ${statusColor.bg} ${statusColor.text} ${statusColor.border} border`}>
+                                                                        {demand.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-bold">
+                                                                    {demand.questions?.length || 0}
+                                                                </td>
+                                                                <td className="px-6 py-4 text-sm text-slate-700">
+                                                                    <div className="max-w-xs line-clamp-2">
+                                                                        {demand.winner?.supplierName || (demand.winner?.mode === 'item' && demand.winner?.items ? (() => {
+                                                                            const uniqueSuppliers = Array.from(new Set(demand.winner.items.map((i: any) => i.supplierName))).filter(Boolean);
+                                                                            if (uniqueSuppliers.length === 1) return uniqueSuppliers[0];
+                                                                            if (uniqueSuppliers.length > 1) return "Vários Fornecedores";
+                                                                            return "-";
+                                                                        })() : '-')}
+                                                                        {(demand.winner?.supplierName || (demand.winner?.mode === 'item' && demand.winner?.items?.length === 1)) && (
+                                                                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                                                                {suppliers.find(s => s.name === (demand.winner?.supplierName || demand.winner?.items?.[0]?.supplierName))?.cnpj || ''}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-slate-900">
+                                                                    {(demand.winner?.totalValue ?? demand.winner?.total_value)
+                                                                        ? (demand.winner.totalValue ?? demand.winner?.total_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                                                        : '-'}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        /* Cards View */
+                                        <div className="p-6 grid gap-4">
+                                            {paginatedDemands.map(demand => {
+                                                const statusColor = STATUS_COLORS[demand.status];
+                                                const hasWinner = demand.status === DemandStatus.VENCEDOR_DEFINIDO || demand.status === DemandStatus.CONCLUIDA;
+                                                const validProposals = demand.proposals?.filter(p => !p.observations?.includes('DECLINED')) || [];
 
-                                                        <div className="hidden sm:flex h-12 w-12 bg-slate-100 rounded-full items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all group-hover:scale-110 flex-shrink-0">
-                                                            <span className="text-2xl">→</span>
+                                                return (
+                                                    <div
+                                                        key={demand.id}
+                                                        onClick={() => onSelectDemand && onSelectDemand(demand)}
+                                                        className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer group relative overflow-hidden"
+                                                    >
+                                                        {/* Decorative gradient bar */}
+                                                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${hasWinner ? 'bg-gradient-to-b from-green-500 to-emerald-600' : 'bg-gradient-to-b from-blue-500 to-indigo-600'}`}></div>
+
+                                                        <div className="flex flex-col gap-4 pl-4 p-6">
+                                                            {/* Header Section */}
+                                                            <div className="flex flex-col lg:flex-row justify-between lg:items-start gap-4">
+                                                                <div className="flex-1">
+                                                                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                                                                        <span className="bg-slate-100 text-slate-700 text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-200 font-bold">
+                                                                            {demand.protocol}
+                                                                        </span>
+                                                                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                                                                            <ClockIcon className="w-3.5 h-3.5" />
+                                                                            {new Date(demand.createdAt).toLocaleDateString('pt-BR')}
+                                                                        </span>
+                                                                        <span className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
+                                                                            {demand.status}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors mb-2 leading-tight">
+                                                                        {demand.title}
+                                                                    </h3>
+
+                                                                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <BuildingIcon className="w-4 h-4 text-slate-400" />
+                                                                            <span className="font-medium">{demand.requestingDepartment}</span>
+                                                                        </div>
+                                                                        {demand.items && demand.items.length > 0 && (
+                                                                            <div className="flex items-center gap-2">
+                                                                                <TagIcon className="w-4 h-4 text-slate-400" />
+                                                                                <span className="text-xs text-slate-500">{demand.items.length} {demand.items.length === 1 ? 'item' : 'itens'}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="flex items-center gap-2">
+                                                                            <ChatIcon className="w-4 h-4 text-slate-400" />
+                                                                            <span className="text-xs text-slate-500">{demand.questions?.length || 0} dúvidas</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="hidden sm:flex h-12 w-12 bg-slate-100 rounded-full items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all group-hover:scale-110 flex-shrink-0">
+                                                                    <span className="text-2xl">→</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Proposals Section - Only show when there's a winner */}
+                                                            {hasWinner && validProposals.length > 0 && (
+                                                                <div className="border-t border-slate-200 pt-4 mt-2">
+                                                                    <div className="flex items-center gap-2 mb-3">
+                                                                        <UsersIcon className="w-4 h-4 text-slate-500" />
+                                                                        <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                                                            Propostas Recebidas ({validProposals.length})
+                                                                        </h4>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                        {validProposals.map((proposal, idx) => {
+                                                                            const isWinner = proposal.supplierName === demand.winner?.supplierName;
+
+                                                                            return (
+                                                                                <div
+                                                                                    key={idx}
+                                                                                    className={`p-3 rounded-lg border-2 transition-all ${isWinner
+                                                                                        ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-md'
+                                                                                        : 'bg-slate-50 border-slate-200'
+                                                                                        }`}
+                                                                                >
+                                                                                    {isWinner && (
+                                                                                        <div className="flex items-center gap-1 mb-2">
+                                                                                            <CheckCircleIcon className="w-3.5 h-3.5 text-green-600" />
+                                                                                            <span className="text-[9px] font-bold text-green-700 uppercase tracking-wider">Vencedor</span>
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    <p className={`font-bold text-sm mb-1 ${isWinner ? 'text-green-900' : 'text-slate-700'}`}>
+                                                                                        {proposal.supplierName}
+                                                                                    </p>
+
+                                                                                    <div className="space-y-1">
+                                                                                        <div className="flex items-center justify-between">
+                                                                                            <span className="text-[10px] text-slate-500 uppercase font-semibold">Valor:</span>
+                                                                                            <span className={`text-sm font-bold ${isWinner ? 'text-green-600' : 'text-slate-700'}`}>
+                                                                                                {(proposal.totalValue ?? (proposal as any).total_value)?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                                            </span>
+                                                                                        </div>
+
+                                                                                        {proposal.deliveryTime && (
+                                                                                            <div className="flex items-center justify-between">
+                                                                                                <span className="text-[10px] text-slate-500 uppercase font-semibold">Prazo:</span>
+                                                                                                <span className={`text-xs font-medium ${isWinner ? 'text-green-700' : 'text-slate-600'}`}>
+                                                                                                    {formatDeliveryTime(proposal.deliveryTime, proposal.submittedAt, demand.deadline)}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Winner Only (when no proposals to show) */}
+                                                            {demand.winner && validProposals.length === 0 && (
+                                                                <div className="border-t border-slate-200 pt-4 mt-2">
+                                                                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+                                                                        <div className="flex items-center gap-2 mb-2">
+                                                                            <CheckCircleIcon className="w-4 h-4 text-green-600" />
+                                                                            <p className="text-xs text-green-700 uppercase tracking-wider font-bold">Vencedor</p>
+                                                                        </div>
+                                                                        <p className="font-bold text-slate-900 text-base mb-1">{demand.winner.supplierName}</p>
+                                                                        <p className="text-[10px] text-slate-400 font-mono mb-2">
+                                                                            CNPJ: {suppliers.find(s => s.name === demand.winner?.supplierName)?.cnpj || '-'}
+                                                                        </p>
+                                                                        <div className="mb-3 flex items-center gap-2">
+                                                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border ${demand.winner?.mode === 'item' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                                                                                {demand.winner?.mode === 'item' ? '🚀 Misto (por Item)' : '🏢 Homologação Global'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-green-600 font-bold text-lg">
+                                                                            {(demand.winner.totalValue ?? demand.winner.total_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* No Winner Yet */}
+                                                            {!demand.winner && (
+                                                                <div className="border-t border-slate-200 pt-4 mt-2">
+                                                                    <div className="text-center flex items-center gap-2 text-slate-400 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200">
+                                                                        <InformationCircleIcon className="w-5 h-5" />
+                                                                        <span className="text-xs font-medium">Aguardando definição</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
 
-                                                    {/* Proposals Section - Only show when there's a winner */}
-                                                    {hasWinner && validProposals.length > 0 && (
-                                                        <div className="border-t border-slate-200 pt-4 mt-2">
-                                                            <div className="flex items-center gap-2 mb-3">
-                                                                <UsersIcon className="w-4 h-4 text-slate-500" />
-                                                                <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                                                                    Propostas Recebidas ({validProposals.length})
-                                                                </h4>
-                                                            </div>
-
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                {validProposals.map((proposal, idx) => {
-                                                                    const isWinner = proposal.supplierName === demand.winner?.supplierName;
-
-                                                                    return (
-                                                                        <div
-                                                                            key={idx}
-                                                                            className={`p-3 rounded-lg border-2 transition-all ${isWinner
-                                                                                ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-md'
-                                                                                : 'bg-slate-50 border-slate-200'
-                                                                                }`}
-                                                                        >
-                                                                            {isWinner && (
-                                                                                <div className="flex items-center gap-1 mb-2">
-                                                                                    <CheckCircleIcon className="w-3.5 h-3.5 text-green-600" />
-                                                                                    <span className="text-[9px] font-bold text-green-700 uppercase tracking-wider">Vencedor</span>
-                                                                                </div>
-                                                                            )}
-
-                                                                            <p className={`font-bold text-sm mb-1 ${isWinner ? 'text-green-900' : 'text-slate-700'}`}>
-                                                                                {proposal.supplierName}
-                                                                            </p>
-
-                                                                            <div className="space-y-1">
-                                                                                <div className="flex items-center justify-between">
-                                                                                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Valor:</span>
-                                                                                    <span className={`text-sm font-bold ${isWinner ? 'text-green-600' : 'text-slate-700'}`}>
-                                                                                        {proposal.totalValue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                                                                    </span>
-                                                                                </div>
-
-                                                                                {proposal.deliveryTime && (
-                                                                                    <div className="flex items-center justify-between">
-                                                                                        <span className="text-[10px] text-slate-500 uppercase font-semibold">Prazo:</span>
-                                                                                        <span className={`text-xs font-medium ${isWinner ? 'text-green-700' : 'text-slate-600'}`}>
-                                                                                            {proposal.deliveryTime}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Winner Only (when no proposals to show) */}
-                                                    {demand.winner && validProposals.length === 0 && (
-                                                        <div className="border-t border-slate-200 pt-4 mt-2">
-                                                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
-                                                                <div className="flex items-center gap-2 mb-2">
-                                                                    <CheckCircleIcon className="w-4 h-4 text-green-600" />
-                                                                    <p className="text-xs text-green-700 uppercase tracking-wider font-bold">Vencedor</p>
-                                                                </div>
-                                                                <p className="font-bold text-slate-900 text-base mb-1">{demand.winner.supplierName}</p>
-                                                                <p className="text-green-600 font-bold text-lg">
-                                                                    {demand.winner.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* No Winner Yet */}
-                                                    {!demand.winner && (
-                                                        <div className="border-t border-slate-200 pt-4 mt-2">
-                                                            <div className="text-center flex items-center gap-2 text-slate-400 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200">
-                                                                <InformationCircleIcon className="w-5 h-5" />
-                                                                <span className="text-xs font-medium">Aguardando definição</span>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                    {/* Pagination */}
+                                    <Pagination
+                                        currentPage={currentPage}
+                                        totalPages={totalPages}
+                                        onPageChange={setCurrentPage}
+                                        totalItems={filteredDemands.length}
+                                        itemsPerPage={itemsPerPage}
+                                    />
+                                </>
                             ) : (
                                 <div className="text-center py-24">
                                     <div className="inline-block p-4 rounded-full bg-slate-100 mb-4">
@@ -520,48 +710,59 @@ const TransparencyPage: React.FC<TransparencyPageProps> = ({ demands, suppliers,
                                 </div>
                             )
                         ) : (
-                            filteredSuppliers.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                    {filteredSuppliers.map(supplier => (
-                                        <div key={supplier.id} className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col justify-between hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                                            <div>
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div className="h-12 w-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-xl border border-indigo-100">
-                                                        {supplier.name.charAt(0)}
+                            paginatedSuppliers.length > 0 ? (
+                                <>
+                                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                        {paginatedSuppliers.map(supplier => (
+                                            <div key={supplier.id} className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col justify-between hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                                                <div>
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div className="h-12 w-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-xl border border-indigo-100">
+                                                            {supplier.name.charAt(0)}
+                                                        </div>
+                                                        <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full border border-green-200 flex items-center gap-1">
+                                                            <CheckCircleIcon className="w-3 h-3" /> Regular
+                                                        </span>
                                                     </div>
-                                                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full border border-green-200 flex items-center gap-1">
-                                                        <CheckCircleIcon className="w-3 h-3" /> Regular
-                                                    </span>
-                                                </div>
-                                                <h3 className="font-bold text-slate-800 text-lg leading-tight mb-1 line-clamp-2" title={supplier.name}>{supplier.name}</h3>
-                                                <p className="text-slate-400 text-xs font-mono mb-4">CNPJ: {supplier.cnpj}</p>
+                                                    <h3 className="font-bold text-slate-800 text-lg leading-tight mb-1 line-clamp-2" title={supplier.name}>{supplier.name}</h3>
+                                                    <p className="text-slate-400 text-xs font-mono mb-4">CNPJ: {supplier.cnpj}</p>
 
-                                                <div className="space-y-2 text-sm text-slate-600 mb-4">
-                                                    <div className="flex items-start gap-2">
-                                                        <LocationMarkerIcon className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-                                                        <span className="line-clamp-2 text-xs">{supplier.address}</span>
+                                                    <div className="space-y-2 text-sm text-slate-600 mb-4">
+                                                        <div className="flex items-start gap-2">
+                                                            <LocationMarkerIcon className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                                                            <span className="line-clamp-2 text-xs">{supplier.address}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-4 border-t border-slate-100 mt-2">
+                                                    <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Áreas de Atuação</p>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {supplier.groups.slice(0, 3).map(g => (
+                                                            <span key={g} className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100 font-medium">
+                                                                {g}
+                                                            </span>
+                                                        ))}
+                                                        {supplier.groups.length > 3 && (
+                                                            <span className="text-[10px] bg-slate-50 text-slate-500 px-2 py-1 rounded-md border border-slate-200">
+                                                                +{supplier.groups.length - 3}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
+                                        ))}
+                                    </div>
 
-                                            <div className="pt-4 border-t border-slate-100 mt-2">
-                                                <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Áreas de Atuação</p>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {supplier.groups.slice(0, 3).map(g => (
-                                                        <span key={g} className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100 font-medium">
-                                                            {g}
-                                                        </span>
-                                                    ))}
-                                                    {supplier.groups.length > 3 && (
-                                                        <span className="text-[10px] bg-slate-50 text-slate-500 px-2 py-1 rounded-md border border-slate-200">
-                                                            +{supplier.groups.length - 3}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                    {/* Pagination */}
+                                    <Pagination
+                                        currentPage={currentPage}
+                                        totalPages={totalPages}
+                                        onPageChange={setCurrentPage}
+                                        totalItems={filteredSuppliers.length}
+                                        itemsPerPage={itemsPerPage}
+                                    />
+                                </>
                             ) : (
                                 <div className="text-center py-24">
                                     <div className="inline-block p-4 rounded-full bg-slate-100 mb-4">

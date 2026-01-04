@@ -1,5 +1,6 @@
 
 import React, { useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { XIcon } from './icons';
 
 interface ModalProps {
@@ -29,14 +30,14 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
 
   if (!isOpen) return null;
 
-  return (
-    <div 
-      className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[99999] flex justify-center items-center p-2 sm:p-4 md:p-6 lg:p-10 transition-all duration-300"
-      style={{ isolation: 'isolate' }}
+  return createPortal(
+    <div
+      className="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-[999999] flex justify-center items-center p-2 sm:p-4 md:p-6 lg:p-10 transition-all duration-300 overflow-y-auto"
+      style={{ isolation: 'isolate', scrollBehavior: 'smooth' }}
       onClick={onClose}
     >
-      <div 
-        className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col transform transition-all duration-500 scale-100 opacity-100 animate-modal-enter relative overflow-hidden border border-slate-200" 
+      <div
+        className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-5xl my-auto flex flex-col transform transition-all duration-500 scale-100 opacity-100 animate-modal-enter relative overflow-hidden border border-slate-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Cabeçalho do Modal - Rígido, Opaco e Inamovível */}
@@ -45,9 +46,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
             <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight truncate">{title}</h2>
             <div className="h-1.5 w-16 bg-blue-600 rounded-full mt-2 hidden sm:block"></div>
           </div>
-          
-          <button 
-            onClick={onClose} 
+
+          <button
+            onClick={onClose}
             className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-600 rounded-2xl transition-all duration-300 group shadow-sm active:scale-95 border border-slate-200"
             title="Fechar (Esc)"
           >
@@ -87,7 +88,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
           background: #94a3b8;
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 };
 

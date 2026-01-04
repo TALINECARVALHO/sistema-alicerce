@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useToast } from '../contexts/ToastContext';
-import { Demand, UserRole, Question, Proposal, DemandStatus, Group, Supplier, CatalogItem, Item, AuditLog } from '../types';
-import { STATUS_COLORS } from '../constants';
+import { Demand, UserRole, Question, Proposal, DemandStatus, Group, Supplier, CatalogItem, Item, AuditLog, Priority } from '../types';
+import { STATUS_COLORS, DEADLINE_RULES, addBusinessDays } from '../constants';
 import QandA from './QandA';
 import ProposalForm from './ProposalForm';
 import ProposalAnalysis from './ProposalAnalysis';
@@ -10,6 +10,8 @@ import StatCard from './StatCard';
 import { BackIcon, FileIcon, DollarIcon, UsersIcon, CalendarIcon, CheckCircleIcon, XCircleIcon, TrashIcon, PlusIcon, SparklesIcon, CogIcon, PrinterIcon, ArchiveIcon, ClockIcon, BellIcon, LockClosedIcon, ChartBarIcon, BanIcon, BuildingIcon, MailIcon, PhoneIcon, LocationMarkerIcon, FilterIcon, ShieldCheckIcon, BoxIcon, TagIcon, ChatIcon } from './icons';
 import RejectionModal from './RejectionModal';
 import Modal from './Modal';
+import PriceHistoryPopover from './PriceHistoryPopover';
+import ItemsDisplay from './ItemsDisplay';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as api from '../services/api';
@@ -22,14 +24,18 @@ interface DemandDetailProps {
     userRole: UserRole;
     currentSupplier?: Supplier;
     catalogItems?: CatalogItem[];
+    allDemands: Demand[];
     onBack: () => void;
+    onEdit?: () => void;
     onSubmitProposal: (demandId: number, proposal: Proposal) => Promise<void>;
     onAddQuestion: (demandId: number, question: Question) => void;
     onAnswerQuestion: (demandId: number, questionId: number, answer: string) => void;
     onDefineWinner: (demandId: number, winner: { supplierName: string; totalValue: number; justification?: string; }) => Promise<void>;
     onStatusChange: (demandId: number, newStatus: DemandStatus, reason?: string) => void;
     onRejectDemand: (demandId: number, reason: string) => void;
-    onAlmoxarifadoDecision?: (demandId: number, items: Item[], status: DemandStatus, observations?: string, rejectionReason?: string) => void;
+    onUpdateDemand?: (demandId: number, data: any) => Promise<void>;
+    onNavigateToDemand?: (demandId: number) => void;
+    onAlmoxarifadoDecision?: (demand_id: number, items: Item[], status: DemandStatus, observations?: string, rejectionReason?: string) => void;
     onComplete?: (demandId: number) => Promise<void>;
 }
 
@@ -40,92 +46,7 @@ const InfoCard: React.FC<{ title: string; children: React.ReactNode, className?:
     </div>
 );
 
-const ItemsTable: React.FC<{ items: Demand['items'], winner?: Demand['winner'], proposals?: Demand['proposals'] }> = ({ items, winner, proposals }) => {
-    const hasWinner = !!winner;
-
-    // Build price map for items
-    const itemPriceMap = new Map<number, { unitPrice: number; deliveryTime: string }>();
-
-    if (hasWinner && winner.items && winner.items.length > 0) {
-        // Item mode - get prices from winner items
-        winner.items.forEach((i: any) => {
-            const winningProposal = proposals?.find(p => p.supplierName === i.supplierName);
-            itemPriceMap.set(
-                Number(i.itemId || i.item_id),
-                {
-                    unitPrice: i.unitPrice,
-                    deliveryTime: winningProposal?.deliveryTime || 'Conforme edital'
-                }
-            );
-        });
-    } else if (hasWinner && winner.supplierName) {
-        // Global mode - get prices from winning proposal
-        const winningProposal = proposals?.find(p => p.supplierName === winner.supplierName);
-        if (winningProposal?.items) {
-            winningProposal.items.forEach((i: any) => {
-                itemPriceMap.set(
-                    Number(i.itemId || i.item_id),
-                    {
-                        unitPrice: i.unitPrice,
-                        deliveryTime: winningProposal.deliveryTime || 'Conforme edital'
-                    }
-                );
-            });
-        }
-    }
-
-    return (
-        <div className="overflow-x-auto">
-            <table className="min-w-full bg-white">
-                <thead className="bg-slate-50">
-                    <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Descrição</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Unidade</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Quantidade</th>
-                        {hasWinner && (
-                            <>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Valor Unit.</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Valor Total</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Prazo</th>
-                            </>
-                        )}
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200/80">
-                    {items.map(item => {
-                        const priceInfo = itemPriceMap.get(item.id);
-                        const unitPrice = priceInfo?.unitPrice || 0;
-                        const totalPrice = unitPrice * item.quantity;
-                        const deliveryTime = priceInfo?.deliveryTime || '-';
-
-                        return (
-                            <tr key={item.id || Math.random()} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{item.description}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{item.unit}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 text-right">{item.quantity}</td>
-                                {hasWinner && (
-                                    <>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600 text-right">
-                                            {unitPrice > 0 ? unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-700 text-right">
-                                            {totalPrice > 0 ? totalPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                                            {deliveryTime}
-                                        </td>
-                                    </>
-                                )}
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-        </div>
-    );
-};
-
-const GroupedItems: React.FC<{ items: Demand['items'], groups: Group[], winner?: Demand['winner'], proposals?: Demand['proposals'] }> = ({ items, groups, winner, proposals }) => {
+const GroupedItems: React.FC<{ items: Demand['items'], groups: Group[], winner?: Demand['winner'], proposals?: Demand['proposals'], isCitizen: boolean, demand: Demand, allDemands: Demand[], onNavigateToDemand?: (demandId: number) => void }> = ({ items, groups, winner, proposals, isCitizen, demand, allDemands, onNavigateToDemand }) => {
     const itemsByGroup = useMemo(() => {
         const grouped: { [key: string]: Demand['items'] } = {};
         for (const item of items) {
@@ -134,11 +55,69 @@ const GroupedItems: React.FC<{ items: Demand['items'], groups: Group[], winner?:
         }
         return Object.entries(grouped);
     }, [items]);
+
+    const itemPriceMap = useMemo(() => {
+        const map = new Map<number, { unitPrice: number; deliveryTime: string }>();
+        const hasWinner = !!winner;
+
+        if (hasWinner) {
+            if (winner.items && winner.items.length > 0) {
+                winner.items.forEach((i: any) => {
+                    const winningProposal = proposals?.find(p => p.supplierName === i.supplierName);
+                    map.set(Number(i.itemId || i.item_id), {
+                        unitPrice: i.unitPrice ?? i.unit_price ?? 0,
+                        deliveryTime: winningProposal?.deliveryTime || winningProposal?.delivery_time || 'Conforme edital'
+                    });
+                });
+            } else if (winner.supplierName) {
+                const winningProposal = proposals?.find(p => p.supplierName === winner.supplierName);
+                winningProposal?.items?.forEach((i: any) => {
+                    map.set(Number(i.itemId || i.item_id), {
+                        unitPrice: i.unitPrice ?? i.unit_price ?? 0,
+                        deliveryTime: winningProposal.deliveryTime || winningProposal.delivery_time || 'Conforme edital'
+                    });
+                });
+            }
+        } else if (!isCitizen && proposals && proposals.length > 0 && demand.status !== DemandStatus.AGUARDANDO_PROPOSTA) {
+            items.forEach(item => {
+                let bestPrice = Infinity;
+                let bestDeadline = '-';
+                proposals.forEach(p => {
+                    const pItem = p.items.find(pi => Number(pi.itemId || pi.item_id) === Number(item.id));
+                    const unitPrice = pItem?.unitPrice ?? (pItem as any)?.unit_price ?? 0;
+                    if (pItem && unitPrice > 0 && unitPrice < bestPrice) {
+                        bestPrice = unitPrice;
+                        bestDeadline = p.deliveryTime || (p as any).delivery_time || '-';
+                    }
+                });
+                if (bestPrice !== Infinity) {
+                    map.set(item.id, { unitPrice: bestPrice, deliveryTime: bestDeadline });
+                }
+            });
+        }
+        return map;
+    }, [items, winner, proposals, isCitizen, demand.status]);
+
     return (
         <div className="space-y-6">
             {itemsByGroup.map(([groupId, groupItems]) => {
                 const group = groups.find(g => g.id === groupId);
-                return (<div key={groupId} className="overflow-hidden rounded-xl border border-slate-200/80"><h4 className="text-md font-semibold text-slate-800 bg-slate-100 p-4 border-b border-slate-200/80">Grupo: {group?.name || groupId}</h4><ItemsTable items={groupItems} winner={winner} proposals={proposals} /></div>);
+                return (
+                    <div key={groupId} className="overflow-hidden rounded-xl border border-slate-200/80">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-4 py-2 border-b border-slate-200/80 flex items-center gap-2">
+                            <BoxIcon className="w-3 h-3" /> Grupo: {group?.name || groupId}
+                        </h4>
+                        <ItemsDisplay
+                            items={groupItems}
+                            demand={demand}
+                            allDemands={allDemands}
+                            isCitizen={isCitizen}
+                            hasWinner={!!winner}
+                            itemPriceMap={itemPriceMap}
+                            onNavigateToDemand={onNavigateToDemand}
+                        />
+                    </div>
+                );
             })}
         </div>
     );
@@ -159,7 +138,11 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
     onAnswerQuestion,
     onDefineWinner,
     onStatusChange,
-    onComplete
+    onUpdateDemand,
+    onNavigateToDemand,
+    allDemands,
+    onComplete,
+    onEdit
 }) => {
     const { success, error: toastError, warning } = useToast();
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
@@ -174,6 +157,33 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
     const [showQandA, setShowQandA] = useState(false);
     const [showPrintOptions, setShowPrintOptions] = useState(false);
 
+    // Edit State for Warehouse
+    const [isEditingItems, setIsEditingItems] = useState(false);
+    const [isApproving, setIsApproving] = useState(false);
+    const [approvalObservations, setApprovalObservations] = useState('');
+    const [editableItems, setEditableItems] = useState<Item[]>([]);
+    const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (demand.items) {
+            setEditableItems([...demand.items]);
+            const groupsInDemand = Array.from(new Set(demand.items.map(i => i.group_id)));
+            setSelectedGroupIds(groupsInDemand);
+        }
+    }, [demand.items, isEditingItems]);
+
+    const availableGroupsForAdd = useMemo(() => {
+        if (!groups || !catalogItems) return [];
+        const itemTypeLabel = demand.type === 'Materiais' ? 'Material' : 'Serviço';
+        const groupDescriptionPrefix = demand.type === 'Materiais' ? 'Materiais' : 'Serviços';
+
+        const groupsWithType = groups.filter(g =>
+            g.description.startsWith(groupDescriptionPrefix) ||
+            catalogItems.some(item => item.groups.includes(g.id) && item.type === itemTypeLabel)
+        );
+        return groupsWithType.filter(g => g.isActive && !selectedGroupIds.includes(g.id));
+    }, [groups, selectedGroupIds, demand.type, catalogItems]);
+
     // Determines if the phase is "Blind" (Secrecy required)
     const isBlindPhase = [DemandStatus.AGUARDANDO_PROPOSTA, DemandStatus.EM_ANALISE].includes(demand.status);
 
@@ -184,6 +194,14 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
         if (!demand.proposalDeadline) return false;
         return new Date(demand.proposalDeadline) < new Date();
     }, [demand.proposalDeadline]);
+
+    const itemsForSupplier = useMemo(() => {
+        if (userRole !== UserRole.FORNECEDOR || !currentSupplier || !groups) return demand.items;
+        const supplierGroupIds = groups
+            .filter(g => (currentSupplier.groups || []).includes(g.name))
+            .map(g => g.id);
+        return demand.items.filter(item => supplierGroupIds.includes(item.group_id));
+    }, [demand.items, userRole, currentSupplier, groups]);
 
     // Determine if user is a citizen/transparency viewer
     const isCitizen = userRole === UserRole.CIDADAO;
@@ -211,11 +229,17 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
     // --- FIND WINNING SUPPLIER FULL DETAILS ---
     const winningSupplierFullDetails = useMemo(() => {
         if (!demand.winner || !suppliers) return null;
+
+        // Find proposal to get more accurate supplier ID if possible
         const winningProposal = demand.proposals.find(p => p.supplierName === demand.winner?.supplierName);
-        if (winningProposal && winningProposal.supplierId) {
-            const supplier = suppliers.find(s => s.id === winningProposal.supplierId);
+
+        if (winningProposal) {
+            const pId = winningProposal.supplierId || (winningProposal as any).supplier_id;
+            const supplier = suppliers.find(s => s.id === pId);
             if (supplier) return supplier;
         }
+
+        // Fallback to name search
         return suppliers.find(s => s.name === demand.winner?.supplierName);
     }, [demand.winner, demand.proposals, suppliers]);
 
@@ -275,8 +299,79 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
     };
 
     const handleAlmoxarifadoApprove = () => {
-        const obs = prompt("Deseja adicionar alguma observação técnica para os fornecedores?");
-        onStatusChange(demand.id, DemandStatus.AGUARDANDO_PROPOSTA, obs || undefined);
+        setIsApproving(true);
+    };
+
+    const confirmApproval = async () => {
+        try {
+            let updateData: any = {
+                status: DemandStatus.AGUARDANDO_PROPOSTA,
+                approval_observations: approvalObservations || undefined
+            };
+
+            // Calculate deadlines if they are not set
+            if (!demand.proposalDeadline || !demand.deadline) {
+                // Safety normalization for legacy data
+                const typeKey = (demand.type === 'Material' ? 'Materiais' : demand.type === 'Serviço' ? 'Serviços' : demand.type) as keyof typeof DEADLINE_RULES;
+                const rules = DEADLINE_RULES[typeKey]?.[demand.priority];
+
+                if (rules) {
+                    const now = new Date();
+                    const propDate = addBusinessDays(now, rules.proposalDays);
+                    const delDate = addBusinessDays(propDate, rules.deliveryDays);
+
+                    updateData.proposalDeadline = new Date(propDate.toISOString().split('T')[0] + 'T23:59:59').toISOString();
+                    updateData.deadline = new Date(delDate.toISOString().split('T')[0] + 'T23:59:59').toISOString();
+                }
+            }
+
+            if (onUpdateDemand) {
+                await onUpdateDemand(demand.id, updateData);
+            } else {
+                onStatusChange(demand.id, DemandStatus.AGUARDANDO_PROPOSTA, approvalObservations || undefined);
+            }
+            setIsApproving(false);
+        } catch (e: any) {
+            toastError("Falha ao aprovar demanda: " + e.message);
+        }
+    };
+
+    const handleSaveAdjustments = async () => {
+        if (onUpdateDemand) {
+            await onUpdateDemand(demand.id, { items: editableItems });
+            setIsEditingItems(false);
+        }
+    };
+
+    const handleAddItem = (catalogItem: CatalogItem, group_id: string) => {
+        const newItem: Item = {
+            id: Date.now(),
+            description: catalogItem.name,
+            unit: catalogItem.unit,
+            quantity: 1,
+            group_id,
+            catalog_item_id: catalogItem.id
+        };
+        setEditableItems(prev => [...prev, newItem]);
+    };
+
+    const handleRemoveItem = (itemId: number) => {
+        setEditableItems(prev => prev.filter(i => i.id !== itemId));
+    };
+
+    const handleUpdateQuantity = (itemId: number, qty: number) => {
+        setEditableItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: Math.max(1, qty) } : i));
+    };
+
+    const handleAddGroup = (groupId: string) => {
+        if (!selectedGroupIds.includes(groupId)) {
+            setSelectedGroupIds(prev => [...prev, groupId]);
+        }
+    };
+
+    const handleRemoveGroup = (groupId: string) => {
+        setSelectedGroupIds(prev => prev.filter(id => id !== groupId));
+        setEditableItems(prev => prev.filter(i => i.group_id !== groupId));
     };
 
     const handlePrintClick = () => {
@@ -549,10 +644,18 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
     const isWarehouseUser = [UserRole.ALMOXARIFADO, UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO].includes(userRole);
 
     return (
-        <div id="demand-detail-container" className="space-y-8 bg-white p-2 rounded-lg">
+        <div id="demand-detail-container" className="space-y-8 bg-white p-6 lg:p-10 rounded-2xl shadow-sm border border-slate-100">
             <div className="flex items-center justify-between hide-on-print-wrapper">
                 <button onClick={onBack} className="hide-on-print flex items-center space-x-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"><BackIcon /><span>Voltar para a lista</span></button>
                 <div className="flex items-center gap-3">
+                    {onEdit && demand.status === DemandStatus.RASCUNHO && (
+                        <button
+                            onClick={onEdit}
+                            className="hide-on-print flex items-center space-x-2 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg hover:bg-amber-200 transition-colors text-sm font-bold border border-amber-200 shadow-sm"
+                        >
+                            <SparklesIcon className="w-4 h-4" /> <span>Retomar Rascunho</span>
+                        </button>
+                    )}
                     <button
                         onClick={handlePrintClick}
                         disabled={isExporting}
@@ -648,7 +751,7 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                         title="Dúvidas"
                         value={demand.questions?.length || 0}
                         subtitle="Perguntas Enviadas"
-                        valueClassName="text-base sm:text-lg lg:text-xl"
+                        valueClassName="text-sm sm:text-base lg:text-lg"
                     />
 
                     {/* 2. Financials: Value */}
@@ -656,14 +759,18 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                         icon={<DollarIcon />}
                         title={demand.status === DemandStatus.VENCEDOR_DEFINIDO ? "Valor Homologado" : "Melhor Oferta"}
                         value={
-                            demand.status === DemandStatus.VENCEDOR_DEFINIDO && demand.winner?.totalValue
-                                ? demand.winner.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                : lowestBid > 0
+                            demand.status === DemandStatus.VENCEDOR_DEFINIDO && (demand.winner?.totalValue ?? demand.winner?.total_value)
+                                ? (demand.winner.totalValue ?? demand.winner?.total_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                : !isBlindPhase && lowestBid > 0
                                     ? lowestBid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                    : 'R$ 0,00'
+                                    : '---'
                         }
-                        subtitle={isBlindPhase ? "Em disputa" : undefined}
-                        valueClassName="text-base sm:text-lg lg:text-xl text-emerald-600"
+                        subtitle={
+                            demand.status === DemandStatus.VENCEDOR_DEFINIDO
+                                ? (demand.winner?.mode === 'item' ? "Misto (por Item)" : "Menor Preço Global")
+                                : (isBlindPhase ? "Em disputa" : undefined)
+                        }
+                        valueClassName="text-sm sm:text-base lg:text-lg text-emerald-600"
                     />
 
                     {/* 3. Timeline: Deadlines */}
@@ -677,7 +784,7 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                                     ? new Date(demand.proposalDeadline).toLocaleDateString('pt-BR')
                                     : 'A definir'
                         }
-                        valueClassName="text-base sm:text-lg lg:text-xl"
+                        valueClassName="text-sm sm:text-base lg:text-lg"
                     />
 
                     {/* 4. Engagement: Proposals */}
@@ -686,7 +793,7 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                         title="Propostas Recebidas"
                         value={demand.proposals.length}
                         subtitle={demand.proposals.length === 1 ? 'Proposta Recebida' : 'Propostas Recebidas'}
-                        valueClassName="text-base sm:text-lg lg:text-xl"
+                        valueClassName="text-sm sm:text-base lg:text-lg"
                     />
                 </div>
             )}
@@ -722,15 +829,41 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                 isWarehouseUser && demand.status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO && (
                     <div className="bg-indigo-900 text-white p-8 rounded-3xl shadow-xl animate-fade-in-down border border-indigo-700 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-10 opacity-10"><ShieldCheckIcon className="w-40 h-40" /></div>
-                        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                            <div>
-                                <h3 className="text-2xl font-black uppercase tracking-tight mb-2">Análise Técnica Requerida</h3>
-                                <p className="text-indigo-200 text-sm max-w-xl">Valide se as descrições dos itens, quantidades e prazos estão corretos antes de liberar para os fornecedores. Uma vez aprovada, a demanda ficará visível para o mercado.</p>
-                            </div>
-                            <div className="flex gap-4 w-full md:w-auto">
-                                <button onClick={() => setIsRejectionModalOpen(true)} className="flex-1 md:flex-initial px-6 py-3 bg-white/10 hover:bg-red-500 transition-colors border border-white/20 rounded-xl font-bold uppercase text-xs tracking-widest">Reprovar Pedido</button>
-                                <button onClick={handleAlmoxarifadoApprove} className="flex-1 md:flex-initial px-10 py-3 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg shadow-indigo-950/50 transform active:scale-95 transition-all">Aprovar e Publicar</button>
-                            </div>
+                        <div className="relative z-10">
+                            {!isApproving ? (
+                                <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+                                    <div>
+                                        <h3 className="text-2xl font-black uppercase tracking-tight mb-2">Análise Técnica Requerida</h3>
+                                        <p className="text-indigo-200 text-sm max-w-xl">Valide se as descrições dos itens, quantidades e prazos estão corretos antes de liberar para os fornecedores. Uma vez aprovada, a demanda ficará visível para o mercado.</p>
+                                    </div>
+                                    <div className="flex gap-4 w-full md:w-auto">
+                                        <button onClick={() => setIsRejectionModalOpen(true)} className="flex-1 md:flex-initial px-6 py-3 bg-white/10 hover:bg-red-500 transition-colors border border-white/20 rounded-xl font-bold uppercase text-xs tracking-widest">Reprovar Pedido</button>
+                                        <button onClick={() => setIsEditingItems(!isEditingItems)} className="flex-1 md:flex-initial px-6 py-3 bg-white/10 hover:bg-white/20 transition-colors border border-white/20 rounded-xl font-bold uppercase text-xs tracking-widest">{isEditingItems ? 'Cancelar Ajustes' : 'Ajustar Itens'}</button>
+                                        {!isEditingItems && <button onClick={handleAlmoxarifadoApprove} className="flex-1 md:flex-initial px-10 py-3 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg shadow-indigo-950/50 transform active:scale-95 transition-all">Aprovar e Publicar</button>}
+                                        {isEditingItems && <button onClick={handleSaveAdjustments} className="flex-1 md:flex-initial px-10 py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg shadow-emerald-950/50 transform active:scale-95 transition-all">Salvar Alterações</button>}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <div>
+                                        <h3 className="text-2xl font-black uppercase tracking-tight mb-2">Observações para Fornecedores</h3>
+                                        <p className="text-indigo-200 text-sm mb-4">Adicione notas técnicas, exigências específicas de marcas ou condições de entrega que os fornecedores devem saber.</p>
+                                        <textarea
+                                            value={approvalObservations}
+                                            onChange={(e) => setApprovalObservations(e.target.value)}
+                                            placeholder="Ex: Exigimos marcas de primeira linha para os itens de construção. Entrega em horário comercial..."
+                                            className="w-full bg-white/10 border border-white/20 rounded-2xl p-4 text-white placeholder-indigo-300 focus:ring-2 focus:ring-indigo-500 focus:bg-white/15 outline-none transition-all min-h-[120px]"
+                                        />
+                                    </div>
+                                    <div className="flex justify-end gap-4">
+                                        <button onClick={() => setIsApproving(false)} className="px-6 py-3 bg-white/10 hover:bg-white/20 transition-colors border border-white/20 rounded-xl font-bold uppercase text-xs tracking-widest">Voltar</button>
+                                        <button onClick={confirmApproval} className="px-10 py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg shadow-emerald-950/50 transform active:scale-95 transition-all flex items-center gap-2">
+                                            <ShieldCheckIcon className="w-5 h-5" />
+                                            Confirmar e Publicar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )
@@ -738,7 +871,7 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
 
             {/* Winner Details Section */}
             {
-                hasWinner && isRequesterOrManager && (
+                hasWinner && (isRequesterOrManager || isCitizen) && (
                     <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-xl shadow-sm animate-fade-in-down">
                         <div className="flex items-center gap-4 mb-4 pb-4 border-b border-emerald-200/60">
                             <div className="bg-emerald-100 p-3 rounded-full text-emerald-700"><BuildingIcon className="w-6 h-6" /></div>
@@ -753,16 +886,19 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                                             <tr>
                                                 <th className="px-4 py-2 text-left text-xs font-bold text-emerald-800 uppercase">Item</th>
                                                 <th className="px-4 py-2 text-left text-xs font-bold text-emerald-800 uppercase">Vencedor</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-emerald-800 uppercase">CNPJ</th>
                                                 <th className="px-4 py-2 text-right text-xs font-bold text-emerald-800 uppercase">Valor Total</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-emerald-50">
                                             {demand.winner.items?.map((winItem: any, idx: number) => {
                                                 const originalItem = demand.items.find(i => i.id === (winItem.itemId || winItem.item_id));
+                                                const sup = suppliers.find(s => s.name === winItem.supplierName);
                                                 return (
                                                     <tr key={idx}>
                                                         <td className="px-4 py-2 text-sm text-slate-700">{originalItem?.description || `Item ${idx + 1}`}</td>
                                                         <td className="px-4 py-2 text-sm font-bold text-emerald-700">{winItem.supplierName}</td>
+                                                        <td className="px-4 py-2 text-sm text-slate-500 font-mono">{sup?.cnpj || '-'}</td>
                                                         <td className="px-4 py-2 text-right text-sm font-bold text-slate-800">{winItem.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                                     </tr>
                                                 );
@@ -770,7 +906,7 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                                         </tbody>
                                         <tfoot className="bg-emerald-50">
                                             <tr>
-                                                <td colSpan={2} className="px-4 py-2 text-right text-xs font-bold text-emerald-800 uppercase">Valor Total Global Adjudicado:</td>
+                                                <td colSpan={3} className="px-4 py-2 text-right text-xs font-bold text-emerald-800 uppercase">Valor Total Global Adjudicado:</td>
                                                 <td className="px-4 py-2 text-right text-sm font-black text-emerald-900">
                                                     {(demand.winner.items?.reduce((acc: number, cur: any) => acc + cur.totalValue, 0) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                 </td>
@@ -782,8 +918,9 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
                                 <div><p className="text-[10px] font-black uppercase text-emerald-600 mb-1">Razão Social</p><p className="font-bold text-slate-800">{demand.winner?.supplierName}</p></div>
-                                <div><p className="text-[10px] font-black uppercase text-emerald-600 mb-1">Valor Homologado</p><p className="font-bold text-slate-800">{demand.winner?.totalValue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
-                                {winningSupplierFullDetails && (
+                                <div><p className="text-[10px] font-black uppercase text-emerald-600 mb-1">CNPJ</p><p className="font-bold text-slate-800">{winningSupplierFullDetails?.cnpj || demand.winner?.cnpj || '-'}</p></div>
+                                <div><p className="text-[10px] font-black uppercase text-emerald-600 mb-1">Valor Homologado</p><p className="font-bold text-slate-800">{(demand.winner?.totalValue ?? demand.winner?.total_value)?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
+                                {winningSupplierFullDetails && isRequesterOrManager && (
                                     <>
                                         <div><p className="text-[10px] font-black uppercase text-emerald-600 mb-1">Responsável</p><p className="font-bold text-slate-800">{winningSupplierFullDetails.contactPerson}</p></div>
                                         <div><p className="text-[10px] font-black uppercase text-emerald-600 mb-1">Contatos</p><p className="font-medium text-slate-700">{winningSupplierFullDetails.phone} | {winningSupplierFullDetails.email}</p></div>
@@ -802,13 +939,7 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                 )
             }
 
-            {/* Main Content Grid - Only shown if there is content to display.
-                For Suppliers in AGUARDANDO_PROPOSTA who haven't submitted yet:
-                - Description is hidden
-                - Items are hidden (avoid dupe)
-                - Requester Data is hidden
-                So we hide the whole grid to avoid empty whitespace from space-y-8.
-             */}
+            {/* Main Content Grid */}
             {
                 !(userRole === UserRole.FORNECEDOR && demand.status === DemandStatus.AGUARDANDO_PROPOSTA && !supplierProposal && !demand.rejectionReason) && (
                     <div className="space-y-6">
@@ -849,7 +980,99 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                         {/* Items List */}
                         {!(userRole === UserRole.FORNECEDOR && demand.status === DemandStatus.AGUARDANDO_PROPOSTA && !supplierProposal) && (
                             <InfoCard title="Itens da Demanda">
-                                <GroupedItems items={demand.items} groups={groups} winner={demand.winner} proposals={demand.proposals} />
+                                {isEditingItems ? (
+                                    <div className="space-y-8 animate-fade-in-down">
+                                        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                                            <div>
+                                                <h4 className="text-blue-900 font-bold flex items-center gap-2"><PlusIcon className="w-5 h-5" /> Adicionar Novos Itens</h4>
+                                                <p className="text-blue-700 text-xs">Selecione um grupo para adicionar itens do catálogo.</p>
+                                            </div>
+                                            <select
+                                                onChange={e => handleAddGroup(e.target.value)}
+                                                value=""
+                                                className="w-full md:w-64 rounded-xl border-blue-200 bg-white text-sm py-2 px-3 shadow-sm focus:ring-blue-500"
+                                            >
+                                                <option value="" disabled>Selecionar Grupo...</option>
+                                                {availableGroupsForAdd.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            {selectedGroupIds.map(groupId => {
+                                                const group = groups.find(g => g.id === groupId);
+                                                const groupItems = editableItems.filter(i => i.group_id === groupId);
+                                                const groupCatalogItems = catalogItems.filter(ci => ci.groups.includes(groupId) && ci.type === (demand.type === 'Materiais' ? 'Material' : 'Serviço'));
+                                                const addedItemIds = groupItems.map(i => i.catalog_item_id);
+                                                const availableCatalogItems = groupCatalogItems.filter(ci => !addedItemIds.includes(ci.id));
+
+                                                return (
+                                                    <div key={groupId} className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                                                        <div className="bg-white px-5 py-3 flex justify-between items-center border-b border-slate-200">
+                                                            <h4 className="font-bold text-slate-800 flex items-center gap-2"><div className="w-1.5 h-5 bg-indigo-600 rounded-full"></div> {group?.name || groupId}</h4>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveGroup(groupId)}
+                                                                className="text-red-400 hover:text-red-600 p-1.5 rounded-full hover:bg-red-50 transition-colors"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                        <div className="p-5 space-y-4">
+                                                            {groupItems.map((item, idx) => (
+                                                                <div key={item.id} className="flex flex-col sm:flex-row gap-4 items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                                                    <div className="flex-grow text-sm font-bold text-slate-700">{item.description} <span className="text-xs font-normal text-slate-400">({item.unit})</span></div>
+                                                                    <div className="w-full sm:w-32 flex items-center gap-2">
+                                                                        <label className="text-[10px] text-slate-400 uppercase font-black">Qtd:</label>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="1"
+                                                                            value={item.quantity}
+                                                                            onChange={e => handleUpdateQuantity(item.id, parseInt(e.target.value))}
+                                                                            className="w-full rounded-lg border-slate-200 px-2 py-1 text-center font-bold text-slate-800 focus:ring-indigo-500 focus:border-indigo-500"
+                                                                        />
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveItem(item.id)}
+                                                                        className="text-slate-300 hover:text-red-500 transition-colors"
+                                                                    >
+                                                                        <XCircleIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+
+                                                            <div className="pt-2">
+                                                                <select
+                                                                    value=""
+                                                                    onChange={e => {
+                                                                        const ci = availableCatalogItems.find(i => i.id === e.target.value);
+                                                                        if (ci) handleAddItem(ci, groupId);
+                                                                    }}
+                                                                    className="w-full rounded-xl border-dashed border-2 border-slate-300 text-slate-500 text-sm py-2.5 px-3 focus:border-indigo-400 bg-white/50 hover:bg-white transition-colors cursor-pointer"
+                                                                >
+                                                                    <option value="" disabled>+ Adicionar item do catálogo...</option>
+                                                                    {availableCatalogItems.map(item => <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>)}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
+                                        <GroupedItems
+                                            items={itemsForSupplier}
+                                            groups={groups}
+                                            winner={demand.winner}
+                                            proposals={demand.proposals}
+                                            isCitizen={isCitizen}
+                                            demand={demand}
+                                            allDemands={allDemands}
+                                            onNavigateToDemand={onNavigateToDemand}
+                                        />
+                                    </div>)}
                             </InfoCard>
                         )}
 
@@ -881,14 +1104,14 @@ const DemandDetail: React.FC<DemandDetailProps> = ({
                             )
                         ) : (
                             <div className="space-y-10">
-                                <ProposalForm demand={demand} onSubmit={onSubmitProposal} currentSupplier={currentSupplier} />
+                                <ProposalForm demand={demand} onSubmit={onSubmitProposal} currentSupplier={currentSupplier} groups={groups} />
                             </div>
                         )}
                     </div>
                 )
             }
 
-            {canAnalyzeProposals && demand.status === DemandStatus.EM_ANALISE && <ProposalAnalysis demand={demand} onDefineWinner={onDefineWinner} />}
+            {canAnalyzeProposals && demand.status === DemandStatus.EM_ANALISE && <ProposalAnalysis demand={demand} allDemands={allDemands} onDefineWinner={onDefineWinner} onNavigateToDemand={onNavigateToDemand} />}
 
             {(showQandA || (userRole !== UserRole.FORNECEDOR)) && (
                 <div className="space-y-6">

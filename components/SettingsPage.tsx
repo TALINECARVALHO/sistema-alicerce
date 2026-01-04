@@ -3,14 +3,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import PageHeader from './PageHeader';
 import { MailIcon, ChartBarIcon, ShieldCheckIcon, BeakerIcon, ArrowLeftIcon, UserIcon } from './icons';
 import * as api from '../services/api';
-import { EmailTemplate, Group, CatalogItem, UserRole } from '../types';
+import { EmailTemplate, Group, CatalogItem, UserRole, Demand } from '../types';
 import Groups from './Groups';
 import Catalog from './Catalog';
 import AdminUsers from './AdminUsers';
+import AuxiliaryData from './AuxiliaryData';
 
 interface SettingsPageProps {
     groups: Group[];
     catalogItems: CatalogItem[];
+    demands: Demand[];
     userRole: UserRole;
     onNavigate: (page: any) => void;
     onNewGroup: () => void;
@@ -20,16 +22,17 @@ interface SettingsPageProps {
     onNewCatalogItem: () => void;
     onEditCatalogItem: (item: CatalogItem) => void;
     onDeleteCatalogItem: (itemId: number) => void;
+    onDataChange?: () => void;
 }
 
 const SettingsPage: React.FC<SettingsPageProps> = ({
-    groups, catalogItems, userRole, onNavigate,
+    groups, catalogItems, demands, userRole, onNavigate,
     onNewGroup, onEditGroup, onDeleteGroup, onToggleGroupStatus,
-    onNewCatalogItem, onEditCatalogItem, onDeleteCatalogItem
+    onNewCatalogItem, onEditCatalogItem, onDeleteCatalogItem, onDataChange
 }) => {
     // Navigation State
     const { success, error: toastError } = useToast();
-    const [view, setView] = useState<'dashboard' | 'groups' | 'catalog' | 'templates' | 'users'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'groups' | 'catalog' | 'templates' | 'users' | 'aux'>('dashboard');
 
     const canManageUsers = [UserRole.GESTOR_SUPREMO, UserRole.CONTRATACOES].includes(userRole);
 
@@ -108,12 +111,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
                     <h1 className="text-3xl font-bold text-slate-800">
                         {view === 'dashboard' ? 'Configurações' :
                             view === 'groups' ? 'Gerenciar Grupos' :
-                                view === 'catalog' ? 'Catálogo de Itens' : 'Modelos de E-mail'}
+                                view === 'aux' ? 'Dados Auxiliares' :
+                                    'Modelos de E-mail'}
                     </h1>
                     <p className="text-slate-500 mt-1">
                         {view === 'dashboard' ? 'Painel de controle geral do sistema.' :
                             view === 'groups' ? 'Adicione, edite ou remova grupos e categorias.' :
-                                view === 'catalog' ? 'Gerencie os itens disponíveis para solicitação.' : 'Personalize os textos dos e-mails automáticos.'}
+                                view === 'aux' ? 'Gerencie listas de secretarias e unidades de medida.' :
+                                    'Personalize os textos dos e-mails automáticos.'}
                     </p>
                 </div>
                 {view !== 'dashboard' && (
@@ -137,14 +142,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
                         </div>
                     </button>
 
-                    <button onClick={() => setView('catalog')} className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group text-left">
-                        <div className="bg-green-50 w-16 h-16 rounded-xl flex items-center justify-center text-green-600 mb-6 group-hover:bg-green-600 group-hover:text-white transition-colors">
-                            <ShieldCheckIcon className="w-8 h-8" />
+                    <button onClick={() => setView('aux')} className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group text-left">
+                        <div className="bg-teal-50 w-16 h-16 rounded-xl flex items-center justify-center text-teal-600 mb-6 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                            <BeakerIcon className="w-8 h-8" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">Catálogo de Itens</h3>
-                        <p className="text-slate-500 text-sm mb-4">Gerencie os produtos e serviços padronizados.</p>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">Dados Auxiliares</h3>
+                        <p className="text-slate-500 text-sm mb-4">Gerencie secretarias e unidades de medida.</p>
                         <div className="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full inline-block">
-                            {catalogItems.length} Itens Cadastrados
+                            Tabelas Básicas
                         </div>
                     </button>
 
@@ -159,16 +164,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
                         </div>
                     </button>
 
-                    <button onClick={() => onNavigate('audit-logs')} className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group text-left">
-                        <div className="bg-purple-50 w-16 h-16 rounded-xl flex items-center justify-center text-purple-600 mb-6 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                            <ShieldCheckIcon className="w-8 h-8" />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">Audit Logs</h3>
-                        <p className="text-slate-500 text-sm mb-4">Visualize o histórico de ações e segurança.</p>
-                        <div className="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full inline-block">
-                            Ver Logs
-                        </div>
-                    </button>
+
 
                     {canManageUsers && (
                         <button onClick={() => setView('users')} className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group text-left">
@@ -198,18 +194,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
                 </div>
             )}
 
-            {view === 'catalog' && (
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <Catalog
-                        items={catalogItems}
-                        groups={groups}
-                        userRole={userRole}
-                        onNewItem={onNewCatalogItem}
-                        onEditItem={onEditCatalogItem}
-                        onDeleteItem={onDeleteCatalogItem}
-                    />
-                </div>
-            )}
+
 
             {view === 'templates' && (
                 <div className="bg-white rounded-xl shadow-md border border-slate-200 h-[600px] flex overflow-hidden">
@@ -237,6 +222,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
                             </>
                         ) : <div className="h-full flex items-center justify-center text-slate-400 italic">Selecione um modelo à esquerda ou clique em Resetar.</div>}
                     </div>
+                </div>
+            )}
+
+            {view === 'aux' && (
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <AuxiliaryData onDataChange={onDataChange} />
                 </div>
             )}
 

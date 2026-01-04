@@ -92,11 +92,12 @@ const FileInput: React.FC<{
                             type="date"
                             value={validityDate}
                             onChange={(e) => onDateChange(e.target.value)}
-                            className="block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-2 pl-7"
-                            title="Data de Validade do Documento (Opcional)"
+                            className={`block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs py-2 pl-7 ${!validityDate ? 'border-red-300' : 'border-slate-300'}`}
+                            title="Data de Validade do Documento (Obrigatório)"
+                            required
                         />
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 text-right">Validade (opcional)</p>
+                    <p className="text-[10px] text-slate-400 mt-1 text-right">Validade <span className="text-red-500">*</span></p>
                 </div>
             )}
         </div>
@@ -224,12 +225,20 @@ const SupplierPreRegistrationForm: React.FC<SupplierPreRegistrationFormProps> = 
         // Documents Validation
         const docErrors: string[] = [];
         documentList.forEach(docName => {
-            // Check File Existence (Only for new registrations)
-            if (!initialData && !files[docName]) {
+            // Check File Existence (Only for new registrations that require file upload)
+            const hasFile = !!files[docName];
+            if (!initialData && !hasFile) {
                 docErrors.push(`Anexo faltando: ${docName}`);
             }
 
-            // Date is now optional - no validation needed
+            // Date Validation: Mandatory for everything except Contract/Estatuto and CNPJ Card
+            const isExemptDate = docName === 'Contrato/Estatuto Social' || docName === 'Cartão CNPJ';
+            const hasDate = !!documentDates[docName];
+
+            // If we have a file (or are required to have one), we must have a date (unless exempt)
+            if (!isExemptDate && (hasFile || !initialData) && !hasDate) {
+                docErrors.push(`Data de validade faltando: ${docName}`);
+            }
         });
 
         if (docErrors.length > 0) {

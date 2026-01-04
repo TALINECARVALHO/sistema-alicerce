@@ -1,6 +1,10 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  # A linha abaixo impede que cada 'push' gaste seus créditos no Netlify.
+  # Para fazer o deploy, você deve usar o botão 'Trigger deploy' no painel do Netlify 
+  # ou colocar um '#' antes da linha 'ignore' abaixo.
+  ignore = "exit 0"
 
 [[redirects]]
   from = "/*"

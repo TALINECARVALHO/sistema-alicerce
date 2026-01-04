@@ -1,7 +1,7 @@
 
 import { useToast } from '../contexts/ToastContext';
 import React, { useState, useMemo } from 'react';
-import { Supplier, SupplierStatus, UserRole, Group, Demand } from '../types';
+import { Supplier, SupplierStatus, UserRole, Group, Demand, SupplierDocumentUpdate } from '../types';
 import PageHeader from './PageHeader';
 import Modal from './Modal';
 import {
@@ -130,10 +130,10 @@ const SupplierCard: React.FC<{
 };
 
 const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpdateStatus, onDeleteSupplier, onUpdateSupplier, userRole }) => {
-    const { error: toastError } = useToast();
+    const { error: toastError, success: toastSuccess } = useToast();
     const canManage = [UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO, UserRole.ADMIN].includes(userRole);
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeTab, setActiveTab] = useState<SupplierStatus>('Ativo');
+    const [activeTab, setActiveTab] = useState<SupplierStatus | 'PendingUpdates'>('Ativo');
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
     const [analyzingSupplier, setAnalyzingSupplier] = useState<Supplier | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -144,7 +144,19 @@ const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpd
     const [confirmDeletion, setConfirmDeletion] = useState<Supplier | null>(null);
     const [isEditing, setIsEditing] = useState(false);
 
+    // New state for document updates
+    const [pendingUpdates, setPendingUpdates] = useState<SupplierDocumentUpdate[]>([]);
+
+    React.useEffect(() => {
+        if (activeTab === 'PendingUpdates') {
+            api.fetchPendingDocumentUpdates()
+                .then(setPendingUpdates)
+                .catch(err => toastError("Erro ao buscar atualizações: " + err.message));
+        }
+    }, [activeTab]);
+
     const filteredSuppliers = useMemo(() => {
+        if (activeTab === 'PendingUpdates') return [];
         return suppliers.filter(s => s.status === activeTab &&
             (s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.cnpj.includes(searchTerm))
         );
@@ -191,6 +203,24 @@ const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpd
         console.log('✅ Download iniciado');
     };
 
+    const handleProcessUpdate = async (update: SupplierDocumentUpdate, status: 'APPROVED' | 'REJECTED', reason?: string) => {
+        try {
+            await api.processDocumentUpdate(update.id, status, reason);
+            const updatedList = await api.fetchPendingDocumentUpdates();
+            setPendingUpdates(updatedList);
+            if (status === 'APPROVED') {
+                toastSuccess("Documento aprovado e atualizado com sucesso!");
+                // Reload page or re-fetch suppliers might be good practice here, but for now we trust `processDocumentUpdate` succeeded.
+                // If we want to reflect changes in "Ativo" list immediately if we switch back, we might need a global refresh.
+                // Assuming parent will re-fetch or we will reload on tab switch or something.
+            } else {
+                toastSuccess("Documento rejeitado.");
+            }
+        } catch (e: any) {
+            toastError(`Erro ao processar: ${e.message}`);
+        }
+    };
+
     // Custom Tab (matching Demands)
     const TabItem = ({ isActive, onClick, label, icon }: any) => (
         <button
@@ -213,87 +243,141 @@ const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpd
                 <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
                     <div className="border-b border-slate-100 flex overflow-x-auto custom-scrollbar bg-slate-50/30 p-2 gap-1">
                         <TabItem onClick={() => setActiveTab('Ativo')} isActive={activeTab === 'Ativo'} label="Ativos" icon={<CheckCircleIcon className="w-4 h-4" />} />
-                        <TabItem onClick={() => setActiveTab('Pendente')} isActive={activeTab === 'Pendente'} label="Aguardando" icon={<ClockIcon className="w-4 h-4" />} />
+                        <TabItem onClick={() => setActiveTab('Pendente')} isActive={activeTab === 'Pendente'} label="Aguardando Cadastro" icon={<ClockIcon className="w-4 h-4" />} />
+                        <TabItem onClick={() => setActiveTab('PendingUpdates')} isActive={activeTab === 'PendingUpdates'} label="Atualizações Pendentes" icon={<ClipboardListIcon className="w-4 h-4" />} />
                         <TabItem onClick={() => setActiveTab('Reprovado')} isActive={activeTab === 'Reprovado'} label="Recusados" icon={<XCircleIcon className="w-4 h-4" />} />
                         <TabItem onClick={() => setActiveTab('Inativo')} isActive={activeTab === 'Inativo'} label="Inativos" icon={<BanIcon className="w-4 h-4" />} />
                     </div>
 
-                    <div className="p-5 flex flex-col md:flex-row gap-4 items-center">
-                        <div className="relative flex-grow w-full">
-                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 pointer-events-none" />
-                            <input
-                                type="text"
-                                placeholder="Buscar fornecedor por nome ou CNPJ..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition outline-none text-sm font-medium"
-                            />
-                        </div>
-
-                        <div className="flex gap-3 items-center flex-shrink-0">
-                            <div className="bg-slate-100/80 p-1.5 rounded-xl flex items-center gap-1 border border-slate-200">
-                                <button onClick={() => setViewMode('cards')} className={`p-2.5 rounded-lg transition-all ${viewMode === 'cards' ? 'bg-white shadow-md text-blue-600 scale-105' : 'text-slate-400 hover:text-slate-600'}`} title="Cards">
-                                    <ViewGridIcon className="w-5 h-5" />
-                                </button>
-                                <button onClick={() => setViewMode('table')} className={`p-2.5 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white shadow-md text-blue-600 scale-105' : 'text-slate-400 hover:text-slate-600'}`} title="Lista">
-                                    <ViewListIcon className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Content */}
-                {filteredSuppliers.length > 0 ? (
-                    viewMode === 'cards' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {filteredSuppliers.map(s => (
-                                <SupplierCard
-                                    key={s.id}
-                                    supplier={s}
-                                    onAnalyze={() => setAnalyzingSupplier(s)}
-                                    onDelete={() => setConfirmDeletion(s)}
-                                    onApprove={() => setConfirmApproval(s)}
-                                    onInactivate={() => onUpdateStatus(s.id, 'Inativo')}
-                                    onReactivate={() => onUpdateStatus(s.id, 'Ativo')}
-                                    userRole={userRole}
-                                />
-                            ))}
+                    {activeTab === 'PendingUpdates' ? (
+                        <div className="bg-white overflow-hidden">
+                            {pendingUpdates.length > 0 ? (
+                                <table className="min-w-full divide-y divide-slate-100">
+                                    <thead className="bg-slate-50/50">
+                                        <tr>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Fornecedor</th>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Documento</th>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Data Solicitação</th>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Arquivo</th>
+                                            <th className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {pendingUpdates.map(u => (
+                                            <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                                                <td className="px-6 py-4 font-bold text-slate-700">{u.supplierName || 'N/A'}</td>
+                                                <td className="px-6 py-4">
+                                                    <p className="text-sm font-medium text-slate-800">{u.document_name}</p>
+                                                    {u.validity_date && <p className="text-xs text-slate-400">Nova Validade: {new Date(u.validity_date).toLocaleDateString()}</p>}
+                                                </td>
+                                                <td className="px-6 py-4 text-xs text-slate-500">{new Date(u.created_at).toLocaleDateString()}</td>
+                                                <td className="px-6 py-4">
+                                                    {u.file_path && (
+                                                        <button onClick={() => handleDownloadDocument(u.file_path!, u.file_name || 'doc')} className="flex items-center gap-1 text-blue-600 hover:underline text-xs font-bold">
+                                                            <FileIcon className="w-3 h-3" /> Ver Arquivo
+                                                        </button>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 text-right flex justify-end gap-2">
+                                                    <button onClick={() => handleProcessUpdate(u, 'APPROVED')} className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-200 uppercase tracking-wide">Aprovar</button>
+                                                    <button onClick={() => {
+                                                        const reason = prompt("Motivo da rejeição?");
+                                                        if (reason) handleProcessUpdate(u, 'REJECTED', reason);
+                                                    }} className="px-3 py-1 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 uppercase tracking-wide">Rejeitar</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="text-center py-20">
+                                    <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                                        <CheckCircleIcon className="w-10 h-10" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-700">Tudo em dia!</h3>
+                                    <p className="text-slate-400 text-sm">Nenhuma atualização de documento pendente.</p>
+                                </div>
+                            )}
                         </div>
                     ) : (
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <table className="min-w-full divide-y divide-slate-100">
-                                <thead className="bg-slate-50/50">
-                                    <tr>
-                                        <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Razão Social</th>
-                                        <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">CNPJ</th>
-                                        <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Contato</th>
-                                        <th className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ação</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {filteredSuppliers.map(s => (
-                                        <tr key={s.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer" onClick={() => setAnalyzingSupplier(s)}>
-                                            <td className="px-6 py-4 font-bold text-slate-800">{s.name}</td>
-                                            <td className="px-6 py-4 text-xs text-slate-500">{s.cnpj}</td>
-                                            <td className="px-6 py-4 text-sm text-slate-600">{s.contactPerson}</td>
-                                            <td className="px-6 py-4 text-right">
-                                                <button className="text-blue-600 font-black text-[10px] uppercase hover:underline">Detalhes</button>
-                                            </td>
+                        <div className="p-5 flex flex-col md:flex-row gap-4 items-center">
+                            <div className="relative flex-grow w-full">
+                                <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar fornecedor por nome ou CNPJ..."
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="w-full pl-12 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition outline-none text-sm font-medium"
+                                />
+                            </div>
+
+                            <div className="flex gap-3 items-center flex-shrink-0">
+                                <div className="bg-slate-100/80 p-1.5 rounded-xl flex items-center gap-1 border border-slate-200">
+                                    <button onClick={() => setViewMode('cards')} className={`p-2.5 rounded-lg transition-all ${viewMode === 'cards' ? 'bg-white shadow-md text-blue-600 scale-105' : 'text-slate-400 hover:text-slate-600'}`} title="Cards">
+                                        <ViewGridIcon className="w-5 h-5" />
+                                    </button>
+                                    <button onClick={() => setViewMode('table')} className={`p-2.5 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white shadow-md text-blue-600 scale-105' : 'text-slate-400 hover:text-slate-600'}`} title="Lista">
+                                        <ViewListIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {activeTab !== 'PendingUpdates' && (
+                    filteredSuppliers.length > 0 ? (
+                        viewMode === 'cards' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {filteredSuppliers.map(s => (
+                                    <SupplierCard
+                                        key={s.id}
+                                        supplier={s}
+                                        onAnalyze={() => setAnalyzingSupplier(s)}
+                                        onDelete={() => setConfirmDeletion(s)}
+                                        onApprove={() => setConfirmApproval(s)}
+                                        onInactivate={() => onUpdateStatus(s.id, 'Inativo')}
+                                        onReactivate={() => onUpdateStatus(s.id, 'Ativo')}
+                                        userRole={userRole}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                <table className="min-w-full divide-y divide-slate-100">
+                                    <thead className="bg-slate-50/50">
+                                        <tr>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Razão Social</th>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">CNPJ</th>
+                                            <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Contato</th>
+                                            <th className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ação</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {filteredSuppliers.map(s => (
+                                            <tr key={s.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer" onClick={() => setAnalyzingSupplier(s)}>
+                                                <td className="px-6 py-4 font-bold text-slate-800">{s.name}</td>
+                                                <td className="px-6 py-4 text-xs text-slate-500">{s.cnpj}</td>
+                                                <td className="px-6 py-4 text-sm text-slate-600">{s.contactPerson}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button className="text-blue-600 font-black text-[10px] uppercase hover:underline">Detalhes</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )
+                    ) : (
+                        <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 shadow-inner">
+                            <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                                <UsersIcon className="w-10 h-10" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-700">Nenhum fornecedor {activeTab.toLowerCase()}</h3>
+                            <p className="text-slate-400 text-sm">Não há registros para exibir nesta categoria.</p>
                         </div>
                     )
-                ) : (
-                    <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 shadow-inner">
-                        <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-                            <UsersIcon className="w-10 h-10" />
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-700">Nenhum fornecedor {activeTab.toLowerCase()}</h3>
-                        <p className="text-slate-400 text-sm">Não há registros para exibir nesta categoria.</p>
-                    </div>
                 )}
             </div>
 
@@ -447,11 +531,7 @@ const Suppliers: React.FC<SuppliersProps> = ({ suppliers, demands, groups, onUpd
                                         </h4>
                                         <div className="space-y-3">
                                             {(() => {
-                                                console.log('🔍 DEBUG: Documentos do fornecedor:', analyzingSupplier.documents);
                                                 return analyzingSupplier.documents?.map((doc, idx) => {
-                                                    console.log(`📄 Documento ${idx}:`, doc);
-                                                    console.log(`   - storagePath existe?`, !!doc.storagePath);
-                                                    console.log(`   - storagePath valor:`, doc.storagePath);
                                                     return (
                                                         <div key={idx} className="p-4 bg-white rounded-xl border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all group">
                                                             <div className="flex items-start gap-3 mb-3">

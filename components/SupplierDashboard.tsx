@@ -22,7 +22,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ demands, supplier
     const supplierGroupIds = useMemo(() => {
         if (!supplier || !groups) return [];
         return groups
-            .filter(g => supplier.groups.includes(g.name))
+            .filter(g => (supplier.groups || []).includes(g.name))
             .map(g => g.id);
     }, [supplier, groups]);
 
@@ -281,29 +281,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ demands, supplier
                 </div>
             )}
 
-            {openOpportunities.length > 0 && (
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-xl shadow-lg mb-6 flex flex-col md:flex-row items-center justify-between border border-blue-500">
-                    <div className="flex items-center gap-4 mb-4 md:mb-0">
-                        <div className="bg-white/20 p-3 rounded-full animate-pulse">
-                            <BellIcon className="w-8 h-8 text-yellow-300" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-xl">Oportunidades em Aberto</h3>
-                            <p className="text-blue-100 text-sm mt-1">
-                                Você tem <strong>{openOpportunities.length}</strong> novas cotações compatíveis aguardando sua proposta.
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onViewOpportunities}
-                        className="whitespace-nowrap px-6 py-3 bg-white text-blue-600 font-bold rounded-lg hover:bg-blue-50 transition-colors shadow-sm"
-                    >
-                        Responder Agora
-                    </button>
-                </div>
-            )}
-
-            {/* Stat Cards */}
+            {/* Dashboard Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard icon={<DemandsIcon />} title="Propostas Enviadas" value={supplierStats.submitted} />
                 <StatCard icon={<CheckCircleIcon />} title="Demandas Ganhas" value={supplierStats.won} />

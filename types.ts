@@ -34,6 +34,8 @@ export type Item = {
     quantity: number;
     group_id: string;
     catalog_item_id: string | null;
+    imageUrl?: string;        // Public URL for display
+    imagePath?: string;       // Storage path for management
 };
 
 export type ProposalItem = {
@@ -41,6 +43,7 @@ export type ProposalItem = {
     unitPrice: number;
     brand?: string;
     observations?: string;
+    isDeclined?: boolean;
 };
 
 export type Proposal = {
@@ -142,6 +145,19 @@ export type SupplierDocument = {
     validityDate?: string; // New field for document expiration
 }
 
+export type SupplierDocumentUpdate = {
+    id: number;
+    supplier_id: number;
+    supplierName?: string; // specific for display
+    document_name: string;
+    file_path?: string;
+    file_name?: string;
+    validity_date?: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    rejection_reason?: string;
+    created_at: string;
+}
+
 export type Supplier = {
     id: number;
     name: string;
@@ -228,5 +244,25 @@ export interface DashboardStats {
     approved?: number;
     rejected?: number;
 }
+
+export type Department = {
+    id: number;
+    name: string;
+    active: boolean;
+};
+
+export type UnitOfMeasure = {
+    id: number;
+    name: string;
+    symbol: string;
+    active: boolean;
+};
+
+export type DeliveryLocation = {
+    id: number;
+    name: string;
+    address?: string; // Optional full address
+    active: boolean;
+};
 
 export type Page = 'dashboard' | 'groups' | 'suppliers' | 'demands' | 'catalog' | 'qa' | 'transparency' | 'reports' | 'supplier_dashboard' | 'supplier_data' | 'supplier_reports' | 'supplier_qa' | 'users' | 'settings' | 'training' | 'email_templates' | 'audit-logs';

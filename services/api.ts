@@ -1,6 +1,5 @@
-
 import { supabase } from './supabase';
-import { Supplier, Demand, DemandStatus, Group, Profile, CatalogItem, UserRole, Question, EmailTemplate } from '../types';
+import { Supplier, Demand, DemandStatus, Group, Profile, CatalogItem, UserRole, Question, EmailTemplate, Department, UnitOfMeasure, DeliveryLocation, SupplierDocumentUpdate, SupplierDocument } from '../types';
 import { sendEmail } from './emailService';
 export { sendEmail };
 
@@ -27,7 +26,7 @@ export const mapDemand = (d: any): Demand => ({
     ...d,
     createdAt: d.createdAt || d.created_at,
     proposalDeadline: d.proposalDeadline || d.proposal_deadline,
-    deadline: d.deadline || d.proposal_deadline || d.proposalDeadline, // Fallback se o campo estiver vazio
+    deadline: d.deadline || d.proposal_deadline || d.proposalDeadline,
     decisionDate: d.decision_date || d.decisionDate,
     homologatedBy: d.homologated_by || d.homologatedBy,
     requestingDepartment: d.requestingDepartment || d.requesting_department,
@@ -35,7 +34,39 @@ export const mapDemand = (d: any): Demand => ({
     contactEmail: d.contactEmail || d.contact_email,
     requestDescription: d.requestDescription || d.request_description,
     approvalObservations: d.approval_observations || d.approvalObservations,
-    rejectionReason: d.rejection_reason || d.rejectionReason
+    rejectionReason: d.rejection_reason || d.rejectionReason,
+    questions: (d.questions || []).map((q: any) => ({
+        ...q,
+        supplierName: q.supplierName || q.supplier_name,
+        askedAt: q.askedAt || q.asked_at,
+        answeredAt: q.answeredAt || q.answered_at,
+        answeredBy: q.answeredBy || q.answered_by
+    })).sort((a: any, b: any) => new Date(b.askedAt).getTime() - new Date(a.askedAt).getTime()),
+    proposals: (d.proposals || []).map((p: any) => ({
+        ...p,
+        supplierId: p.supplierId || p.supplier_id,
+        supplierName: p.supplierName || p.supplier_name,
+        submittedAt: p.submittedAt || p.submitted_at,
+        totalValue: p.totalValue || p.total_value,
+        deliveryTime: p.deliveryTime || p.delivery_time
+    })),
+    items: (d.items || []).map((i: any) => ({
+        ...i,
+        groupId: i.groupId || i.group_id,
+        catalogItemId: i.catalogItemId || i.catalog_item_id
+    })),
+    winner: d.winner ? {
+        ...d.winner,
+        supplierName: d.winner.supplierName || d.winner.supplier_name,
+        totalValue: d.winner.totalValue || d.winner.total_value,
+        mode: d.winner.mode || d.winner.judgment_mode || 'global',
+        items: (d.winner.items || []).map((wi: any) => ({
+            ...wi,
+            supplierName: wi.supplierName || wi.supplier_name,
+            unitPrice: wi.unitPrice || wi.unit_price,
+            totalValue: wi.totalValue || wi.total_value
+        }))
+    } : null
 });
 
 export const checkDatabaseHealth = async (): Promise<{ templates: boolean; logs: boolean }> => {
@@ -749,42 +780,98 @@ export const requestPasswordReset = async (userEmail: string): Promise<{ success
 export const approveSupplierWorkflow = async (supplier: Supplier): Promise<{ success: boolean; message: string }> => {
     const tempPass = Math.random().toString(36).slice(-10) + 'A1!';
     try {
-        const profile = await createSystemUser({
-            email: supplier.email,
-            full_name: supplier.contactPerson,
-            role: UserRole.FORNECEDOR,
-            department: supplier.name
-        }, tempPass);
+        let profileId: string | undefined;
 
-        if (!profile) throw new Error("Erro ao criar perfil de autenticação.");
+        // Tenta criar o usuário no sistema de autenticação (Edge Function)
+        try {
+            const profile = await createSystemUser({
+                email: supplier.email,
+                full_name: supplier.contactPerson,
+                role: UserRole.FORNECEDOR,
+                department: supplier.name
+            }, tempPass);
+            profileId = profile?.id;
+        } catch (authError) {
+            console.warn("⚠️ Aviso: Falha ao invocar create-user (possivelmente ambiente local). O fornecedor será ativado sem vínculo de login.", authError);
+        }
 
-        await supabase.from('suppliers').update({ status: 'Ativo', user_id: profile.id }).eq('id', supplier.id);
+        // Atualiza status localmente
+        const updatePayload: any = { status: 'Ativo' };
+        if (profileId) updatePayload.user_id = profileId;
 
-        const { subject, html } = await getEmailContent('SUPPLIER_APPROVED', {
-            '{{supplierName}}': supplier.name,
-            '{{email}}': supplier.email,
-            '{{password}}': tempPass
-        });
-        await sendEmail(supplier.email, subject, html);
+        const { error: updateError } = await supabase.from('suppliers').update(updatePayload).eq('id', supplier.id);
+        if (updateError) throw updateError;
 
-        return { success: true, message: "Fornecedor aprovado com sucesso!" };
+        // Tenta enviar email
+        try {
+            const { subject, html } = await getEmailContent('SUPPLIER_APPROVED', {
+                '{{supplierName}}': supplier.name,
+                '{{email}}': supplier.email,
+                '{{password}}': tempPass
+            });
+            await sendEmail(supplier.email, subject, html);
+        } catch (emailError) {
+            console.error("Erro ao enviar email de aprovação:", emailError);
+        }
+
+        return {
+            success: true,
+            message: profileId
+                ? "Fornecedor aprovado e usuário criado com sucesso!"
+                : "Fornecedor ativado (Aviso: Usuário de login não foi criado pois a função Serverless não respondeu)."
+        };
     } catch (e: any) {
         return { success: false, message: formatError(e) };
     }
 };
 
 export const fetchDemands = async (page: number, pageSize: number, filters?: any, supplierGroups?: string[], userDepartment?: string) => {
-    let query = supabase.from('demands').select('*, items(*), proposals(*), questions(*)', { count: 'exact' });
+    // 1. Logic for Suppliers: Filter demands that have AT LEAST ONE item in the supplier's groups
+    // but return ALL items for those demands (context is important).
+    let relevantDemandIds: number[] | null = null;
 
-    if (filters?.status) query = query.eq('status', filters.status);
-    if (filters?.searchTerm) query = query.ilike('title', `%${filters.searchTerm}%`);
-
-    // Filtro para fornecedores (ver apenas demandas de seus grupos)
     if (supplierGroups && supplierGroups.length > 0) {
-        query = query.filter('items.group_id', 'in', `(${supplierGroups.join(',')})`);
+        // Find demands that have relevant items
+        const { data: matchingItems } = await supabase
+            .from('items')
+            .select('demand_id')
+            .in('group_id', supplierGroups);
+
+        if (matchingItems && matchingItems.length > 0) {
+            relevantDemandIds = Array.from(new Set(matchingItems.map(i => i.demand_id)));
+        } else {
+            // Supplier has groups, but no items match those groups -> No demands to show
+            relevantDemandIds = [];
+        }
     }
 
-    // Filtro para secretarias (ver apenas demandas de seu departamento)
+    // 2. Build the Main Query
+    // We select ALL items (no filtering here) so the supplier sees the full picture
+    let query = supabase.from('demands').select('*, items(*), proposals(*), questions(*)', { count: 'exact' });
+
+    // Apply the ID filter calculated above
+    if (relevantDemandIds !== null) {
+        if (relevantDemandIds.length === 0) {
+            return { data: [], count: 0 };
+        }
+        query = query.in('id', relevantDemandIds);
+    }
+
+    // Apply other filters
+    if (filters?.status) {
+        if (Array.isArray(filters.status)) {
+            query = query.in('status', filters.status);
+        } else {
+            query = query.eq('status', filters.status);
+        }
+    }
+    if (filters?.statuses) { // Support for multiple statuses via 'statuses' filter key as seen in DemandList
+        query = query.in('status', filters.statuses);
+    }
+
+    if (filters?.searchTerm) query = query.ilike('title', `%${filters.searchTerm}%`);
+
+    // Filter by Department (Strict)
     if (userDepartment) {
         query = query.eq('requesting_department', userDepartment);
     }
@@ -794,7 +881,7 @@ export const fetchDemands = async (page: number, pageSize: number, filters?: any
 
     if (error) throw error;
 
-    // Converte os dados do banco para o formato camelCase do frontend
+    // Map to frontend format
     const mappedData = (data || []).map(mapDemand);
 
     return { data: mappedData, count: count || 0 };
@@ -809,4 +896,231 @@ export const deleteDemand = async (id: number): Promise<void> => {
 
     const { error } = await supabase.from('demands').delete().eq('id', id);
     if (error) throw error;
+};
+
+// --- Auxiliary Data ---
+
+export const fetchDepartments = async (): Promise<Department[]> => {
+    const { data, error } = await supabase.from('departments').select('*').order('name');
+    if (error) {
+        // Fallback or silent error if table doesn't exist yet
+        return [];
+    }
+    return data as Department[];
+};
+
+export const createDepartment = async (name: string): Promise<Department | null> => {
+    const { data, error } = await supabase.from('departments').insert([{ name, active: true }]).select().single();
+    if (error) throw error;
+    return data;
+};
+
+export const updateDepartment = async (dept: Department): Promise<void> => {
+    const { error } = await supabase.from('departments').update({ name: dept.name, active: dept.active }).eq('id', dept.id);
+    if (error) throw error;
+};
+
+export const deleteDepartment = async (id: number): Promise<void> => {
+    const { error } = await supabase.from('departments').delete().eq('id', id);
+    if (error) throw error;
+};
+
+// --- Units ---
+
+export const fetchUnits = async (): Promise<UnitOfMeasure[]> => {
+    const { data, error } = await supabase.from('units').select('*').order('name');
+    if (error) {
+        return [];
+    }
+    return data as UnitOfMeasure[];
+};
+
+export const createUnit = async (unit: Omit<UnitOfMeasure, 'id'>): Promise<UnitOfMeasure | null> => {
+    const { data, error } = await supabase.from('units').insert([unit]).select().single();
+    if (error) throw error;
+    return data;
+};
+
+export const updateUnit = async (unit: UnitOfMeasure): Promise<void> => {
+    const { error } = await supabase.from('units').update(unit).eq('id', unit.id);
+    if (error) throw error;
+};
+
+export const deleteUnit = async (id: number): Promise<void> => {
+    const { error } = await supabase.from('units').delete().eq('id', id);
+    if (error) throw error;
+};
+
+// --- Delivery Locations ---
+
+export const fetchDeliveryLocations = async (): Promise<DeliveryLocation[]> => {
+    const { data, error } = await supabase.from('delivery_locations').select('*').order('name');
+    if (error) {
+        return [];
+    }
+    return data as DeliveryLocation[];
+};
+
+export const createDeliveryLocation = async (location: Omit<DeliveryLocation, 'id'>): Promise<DeliveryLocation | null> => {
+    const { data, error } = await supabase.from('delivery_locations').insert([location]).select().single();
+    if (error) throw error;
+    return data;
+};
+
+export const updateDeliveryLocation = async (location: DeliveryLocation): Promise<void> => {
+    const { error } = await supabase.from('delivery_locations').update(location).eq('id', location.id);
+    if (error) throw error;
+};
+
+export const deleteDeliveryLocation = async (id: number): Promise<void> => {
+    const { error } = await supabase.from('delivery_locations').delete().eq('id', id);
+    if (error) throw error;
+};
+
+// --- Document Updates & Approval Workflow ---
+
+export const createDocumentUpdate = async (update: Omit<SupplierDocumentUpdate, 'id' | 'created_at' | 'status'>) => {
+    // Requires a table 'supplier_document_updates'
+    const { error } = await supabase.from('supplier_document_updates').insert({
+        ...update,
+        status: 'PENDING'
+    });
+    if (error) {
+        console.error("Error creating document update:", error);
+        throw error;
+    }
+};
+
+export const fetchPendingDocumentUpdates = async (): Promise<SupplierDocumentUpdate[]> => {
+    // We join with suppliers to get the name
+    const { data, error } = await supabase
+        .from('supplier_document_updates')
+        .select(`
+            *,
+            supplier:suppliers (
+                name
+            )
+        `)
+        .eq('status', 'PENDING')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching updates:", error);
+        return [];
+    }
+
+    // Flatten structure for easier usage
+    return data.map((d: any) => ({
+        ...d,
+        supplierName: d.supplier?.name || 'Fornecedor Desconhecido'
+    }));
+};
+
+export const fetchSupplierDocumentUpdates = async (supplierId: number): Promise<SupplierDocumentUpdate[]> => {
+    const { data, error } = await supabase
+        .from('supplier_document_updates')
+        .select('*')
+        .eq('supplier_id', supplierId)
+        .eq('status', 'PENDING');
+
+    if (error) return [];
+    return data;
+};
+
+export const processDocumentUpdate = async (updateId: number, status: 'APPROVED' | 'REJECTED', reason?: string) => {
+    // 1. Update the request status
+    const { data: update, error: updateError } = await supabase
+        .from('supplier_document_updates')
+        .update({ status, rejection_reason: reason })
+        .eq('id', updateId)
+        .select()
+        .single();
+
+    if (updateError) throw updateError;
+
+    // 2. If approved, actually update the supplier document list
+    if (status === 'APPROVED' && update) {
+        // Fetch current supplier docs
+        const supplier = await fetchSupplierById(update.supplier_id);
+        if (supplier) {
+            const currentDocs = supplier.documents || [];
+            // Remove old version of this doc if exists (same name)
+            const otherDocs = currentDocs.filter(d => d.name !== update.document_name);
+
+            // Add new version
+            const newDoc: SupplierDocument = {
+                name: update.document_name,
+                fileName: update.file_name,
+                storagePath: update.file_path,
+                validityDate: update.validity_date
+            };
+
+            const newDocs = [...otherDocs, newDoc];
+
+            // Call updateSupplier carefully to avoiding wiping other data? 
+            // updateSupplier updates everything passed. 
+            // Ensure we have full supplier object. `fetchSupplierById` returns full object.
+
+            await updateSupplier({ ...supplier, documents: newDocs });
+        }
+    }
+
+    return update;
+};
+
+// --- Item Image Management ---
+
+/**
+ * Upload an item reference image to Supabase Storage
+ * @param file - The image file to upload
+ * @param demandId - The demand ID (for organizing files)
+ * @param itemId - The item ID
+ * @returns The storage path of the uploaded image
+ */
+export const uploadItemImage = async (file: File, demandId: number, itemId: number): Promise<string> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${itemId}_${Date.now()}.${fileExt}`;
+    const filePath = `demands/${demandId}/items/${fileName}`;
+
+    const { data, error } = await supabase.storage
+        .from('item-images')
+        .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error uploading item image:', error);
+        throw error;
+    }
+
+    return data.path;
+};
+
+/**
+ * Get the public URL for an item image
+ * @param path - The storage path of the image
+ * @returns The public URL
+ */
+export const getItemImageUrl = (path: string): string => {
+    const { data } = supabase.storage
+        .from('item-images')
+        .getPublicUrl(path);
+
+    return data.publicUrl;
+};
+
+/**
+ * Delete an item image from storage
+ * @param path - The storage path of the image to delete
+ */
+export const deleteItemImage = async (path: string): Promise<void> => {
+    const { error } = await supabase.storage
+        .from('item-images')
+        .remove([path]);
+
+    if (error) {
+        console.error('Error deleting item image:', error);
+        throw error;
+    }
 };

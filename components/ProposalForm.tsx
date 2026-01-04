@@ -1,25 +1,42 @@
 import { useToast } from '../contexts/ToastContext';
 import React, { useState, useMemo, useEffect } from 'react';
-import { Demand, Proposal, ProposalItem, Supplier } from '../types';
+import { Demand, Proposal, ProposalItem, Supplier, Group } from '../types';
 import { ClockIcon, TagIcon } from './icons';
 
 interface ProposalFormProps {
     demand: Demand;
     onSubmit: (demandId: number, proposal: Proposal) => Promise<void> | void;
     currentSupplier?: Supplier;
+    groups: Group[];
 }
 
-const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSupplier }) => {
+const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSupplier, groups }) => {
     const { error: toastError, warning } = useToast();
     const [items, setItems] = useState<ProposalItem[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Ensure items are initialized when demand changes
+    // Acknowledgment checkboxes
+    const [acknowledgeDelivery, setAcknowledgeDelivery] = useState(false);
+    const [acknowledgeSanctions, setAcknowledgeSanctions] = useState(false);
+
+    // Filter items based on supplier's registered groups
+    const filteredItems = useMemo(() => {
+        if (!currentSupplier || !groups) return demand.items || [];
+
+        // Get IDs of groups the supplier is registered for
+        const supplierGroupIds = groups
+            .filter(g => (currentSupplier.groups || []).includes(g.name))
+            .map(g => g.id);
+
+        return (demand.items || []).filter(item => supplierGroupIds.includes(item.group_id));
+    }, [demand.items, currentSupplier, groups]);
+
+    // Ensure items are initialized when filteredItems changes
     useEffect(() => {
-        if (demand && demand.items) {
-            setItems(demand.items.map(item => ({ itemId: item.id, unitPrice: 0, brand: '' })));
+        if (filteredItems) {
+            setItems(filteredItems.map(item => ({ itemId: item.id, unitPrice: 0, brand: '' })));
         }
-    }, [demand]);
+    }, [filteredItems]);
 
     const [observations, setObservations] = useState('');
 
@@ -51,9 +68,27 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
         );
     };
 
+    const handleToggleDecline = (itemId: number) => {
+        setItems(prevItems =>
+            prevItems.map(item => {
+                if (item.itemId === itemId) {
+                    const isNowDeclined = !item.isDeclined;
+                    return {
+                        ...item,
+                        isDeclined: isNowDeclined,
+                        unitPrice: isNowDeclined ? 0 : item.unitPrice,
+                        brand: isNowDeclined ? '' : item.brand
+                    };
+                }
+                return item;
+            })
+        );
+    };
+
     const calculateGrandTotal = () => {
         return items.reduce((acc, pItem) => {
-            const demandItem = demand.items.find(i => i.id === pItem.itemId);
+            if (pItem.isDeclined) return acc;
+            const demandItem = filteredItems.find(i => i.id === pItem.itemId);
             return acc + (demandItem ? demandItem.quantity * pItem.unitPrice : 0);
         }, 0);
     }
@@ -65,10 +100,10 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
             return;
         }
 
-        // Validate that at least one item has a price
-        const hasValue = items.some(i => i.unitPrice > 0);
-        if (!hasValue) {
-            warning("A proposta deve ter pelo menos um item com valor maior que R$ 0,00.");
+        // Validate that at least one item is NOT declined and has a price
+        const hasValidItem = items.some(i => !i.isDeclined && i.unitPrice > 0);
+        if (!hasValidItem) {
+            warning("A proposta deve ter pelo menos um item cotado (não declinado) com valor maior que R$ 0,00.");
             return;
         }
 
@@ -83,7 +118,20 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
                 warning(`O prazo personalizado deve ser MENOR que o prazo do edital (${maxDays} dias).`);
                 return;
             }
-            deliveryTimeFinal = `${customDays} dias (Antecipado)`;
+            const deliveryDate = new Date();
+            deliveryDate.setDate(deliveryDate.getDate() + parseInt(customDays));
+            const formattedDate = deliveryDate.toLocaleDateString('pt-BR');
+            deliveryTimeFinal = `${customDays} dias (Antecipado - ${formattedDate})`;
+        }
+
+        // Validate acknowledgment checkboxes
+        if (!acknowledgeDelivery) {
+            warning("Você deve confirmar que está ciente sobre a entrega/execução no local indicado.");
+            return;
+        }
+        if (!acknowledgeSanctions) {
+            warning("Você deve confirmar que está ciente sobre as sanções em caso de descumprimento.");
+            return;
         }
 
         setIsSubmitting(true);
@@ -111,7 +159,7 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
     };
 
     const calculateTotal = (itemId: number, unitPrice: number) => {
-        const item = demand.items.find(i => i.id === itemId);
+        const item = filteredItems.find(i => i.id === itemId);
         return item ? item.quantity * unitPrice : 0;
     }
 
@@ -125,25 +173,34 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
             <div>
                 {/* Header Row (Hidden on mobile) */}
                 <div className="hidden md:grid grid-cols-12 gap-4 px-4 pb-2 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    <div className="col-span-5">Descrição / Quantidade</div>
+                    <div className="col-span-4">Descrição / Quantidade</div>
                     <div className="col-span-3">Marca / Fabricante</div>
                     <div className="col-span-2">Preço Unit. (R$)</div>
+                    <div className="col-span-1">EXCLUIR</div>
                     <div className="col-span-2 text-right">Total Item</div>
                 </div>
 
                 <div className="space-y-3">
-                    {demand.items.map(item => {
+                    {(!filteredItems || filteredItems.length === 0) && (
+                        <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500">
+                            <p className="font-bold">Nenhum item compatível com seus grupos de atuação encontrado.</p>
+                            <p className="text-xs mt-2">ID da Demanda: {demand.id}</p>
+                            <p className="text-xs">Seus grupos: {currentSupplier?.groups?.join(', ') || 'Nenhum'}</p>
+                        </div>
+                    )}
+                    {filteredItems && filteredItems.map(item => {
                         const proposalItem = items.find(pi => pi.itemId === item.id);
                         const currentPrice = proposalItem ? proposalItem.unitPrice : 0;
                         const currentBrand = proposalItem ? proposalItem.brand : '';
+                        const isDeclined = proposalItem?.isDeclined || false;
 
                         return (
-                            <div key={item.id} className="p-4 border border-slate-200 rounded-lg bg-slate-50 hover:border-blue-300 transition-colors">
+                            <div key={item.id} className={`p-4 border rounded-lg transition-all ${isDeclined ? 'bg-slate-100 border-slate-300 opacity-75' : 'bg-slate-50 border-slate-200 hover:border-blue-300'}`}>
                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                                     {/* Description & Qty */}
-                                    <div className="md:col-span-5">
-                                        <p className="font-bold text-slate-900 text-base">{item.description}</p>
-                                        <p className="text-xs text-slate-500 mt-1 font-medium">Qtd: <span className="text-slate-900">{item.quantity} {item.unit}</span></p>
+                                    <div className="md:col-span-4">
+                                        <p className={`font-bold text-base ${isDeclined ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{item.description}</p>
+                                        <p className="text-xs text-slate-500 mt-1 font-medium">Qtd: <span className={isDeclined ? 'text-slate-400' : 'text-slate-900'}>{item.quantity} {item.unit}</span></p>
                                     </div>
 
                                     {/* Brand Input */}
@@ -153,8 +210,9 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
                                             type="text"
                                             value={currentBrand}
                                             onChange={e => handleBrandChange(item.id, e.target.value)}
-                                            className="w-full rounded-md border-slate-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
-                                            placeholder="Ex: Tigre..."
+                                            className={`w-full rounded-md border-slate-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 ${isDeclined ? 'bg-slate-200 cursor-not-allowed text-slate-500' : ''}`}
+                                            placeholder={isDeclined ? "ITEM DECLINADO" : "Ex: Tigre..."}
+                                            disabled={isDeclined}
                                         />
                                     </div>
 
@@ -162,23 +220,49 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
                                     <div className="md:col-span-2">
                                         <label className="md:hidden block text-xs font-bold text-slate-600 uppercase mb-1">Preço (R$)</label>
                                         <div className="relative">
-                                            <span className="absolute left-2.5 top-2 text-slate-400 text-sm">R$</span>
+                                            {!isDeclined && <span className="absolute left-2.5 top-2 text-slate-400 text-sm">R$</span>}
                                             <input
                                                 type="number"
                                                 step="0.01"
                                                 min="0"
-                                                value={currentPrice}
+                                                value={isDeclined ? '' : currentPrice}
                                                 onChange={e => handlePriceChange(item.id, parseFloat(e.target.value) || 0)}
-                                                className="w-full rounded-md border-slate-300 shadow-sm pl-8 pr-2 py-2 text-sm font-semibold text-slate-900 focus:border-blue-500 focus:ring-blue-500"
-                                                required
+                                                className={`w-full rounded-md border-slate-300 shadow-sm py-2 text-sm font-semibold focus:border-blue-500 focus:ring-blue-500 ${isDeclined ? 'bg-slate-200 cursor-not-allowed text-slate-400 pl-3' : 'pl-8 pr-2 text-slate-900'}`}
+                                                required={!isDeclined}
+                                                disabled={isDeclined}
+                                                placeholder={isDeclined ? "-" : "0.00"}
                                             />
                                         </div>
+                                    </div>
+
+                                    {/* Decline Toggle */}
+                                    <div className="md:col-span-1 flex flex-col items-center justify-center">
+                                        <label className="md:hidden block text-xs font-bold text-slate-600 uppercase mb-1">Excluir</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleDecline(item.id)}
+                                            className={`p-2 rounded-lg border transition-all ${isDeclined
+                                                ? 'bg-red-100 border-red-300 text-red-600'
+                                                : 'bg-white border-slate-300 text-slate-400 hover:text-red-500 hover:border-red-200'
+                                                }`}
+                                            title={isDeclined ? "Remover Declínio" : "Declinar este item"}
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                {isDeclined ? (
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                ) : (
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                )}
+                                            </svg>
+                                        </button>
                                     </div>
 
                                     {/* Total Item */}
                                     <div className="md:col-span-2 flex justify-between md:justify-end items-center border-t md:border-t-0 border-slate-200 mt-2 pt-2 md:mt-0 md:pt-0">
                                         <span className="md:hidden text-xs font-bold text-slate-500 uppercase">Total</span>
-                                        <span className="font-bold text-slate-900 text-sm">{calculateTotal(item.id, currentPrice).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                        <span className={`font-bold text-sm ${isDeclined ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                                            {isDeclined ? 'R$ 0,00' : calculateTotal(item.id, currentPrice).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -263,11 +347,78 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
                 </div>
             </div>
 
+            {/* Terms and Conditions Section */}
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6 space-y-4">
+                <div className="flex items-start gap-3 mb-4">
+                    <div className="bg-amber-500 text-white rounded-full p-2 flex-shrink-0">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 className="text-lg font-bold text-amber-900 mb-1">Termos e Condições Obrigatórios</h4>
+                        <p className="text-sm text-amber-800">Leia atentamente e marque as declarações abaixo antes de enviar sua proposta.</p>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    {/* Checkbox 1: Delivery/Execution Location */}
+                    <div className={`flex items-start gap-3 p-4 bg-white rounded-lg border-2 transition-all ${acknowledgeDelivery ? 'border-green-300 bg-green-50' : 'border-amber-200'}`}>
+                        <input
+                            type="checkbox"
+                            id="acknowledgeDelivery"
+                            checked={acknowledgeDelivery}
+                            onChange={(e) => setAcknowledgeDelivery(e.target.checked)}
+                            className="mt-1 h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+                        />
+                        <label htmlFor="acknowledgeDelivery" className="flex-1 cursor-pointer">
+                            <span className="block text-sm font-bold text-slate-800 mb-1">
+                                ✓ Ciência sobre Local de Entrega/Execução
+                            </span>
+                            <span className="block text-xs text-slate-600 leading-relaxed">
+                                Declaro estar ciente de que o preço proposto deve <strong>englobar todos os custos de entrega e/ou execução no local indicado pela secretaria solicitante</strong>: <span className="font-semibold text-blue-700">{demand.deliveryLocation}</span>. Não serão aceitos custos adicionais posteriores.
+                            </span>
+                        </label>
+                    </div>
+
+                    {/* Checkbox 2: Sanctions */}
+                    <div className={`flex items-start gap-3 p-4 bg-white rounded-lg border-2 transition-all ${acknowledgeSanctions ? 'border-green-300 bg-green-50' : 'border-amber-200'}`}>
+                        <input
+                            type="checkbox"
+                            id="acknowledgeSanctions"
+                            checked={acknowledgeSanctions}
+                            onChange={(e) => setAcknowledgeSanctions(e.target.checked)}
+                            className="mt-1 h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+                        />
+                        <label htmlFor="acknowledgeSanctions" className="flex-1 cursor-pointer">
+                            <span className="block text-sm font-bold text-slate-800 mb-1">
+                                ✓ Ciência sobre Sanções por Descumprimento
+                            </span>
+                            <span className="block text-xs text-slate-600 leading-relaxed">
+                                Declaro estar ciente de que, <strong>caso seja declarado vencedor e não cumpra com as obrigações assumidas</strong>, estarei sujeito às sanções administrativas previstas em lei, incluindo advertência, multa, suspensão temporária de participação em licitações e impedimento de contratar com o município.
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                {(!acknowledgeDelivery || !acknowledgeSanctions) && (
+                    <div className="flex items-center gap-2 text-amber-800 text-xs bg-amber-100 px-4 py-2 rounded-lg border border-amber-300">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                        <span className="font-medium">Você precisa marcar ambas as declarações para enviar a proposta.</span>
+                    </div>
+                )}
+            </div>
+
             <div className="flex justify-end pt-6 border-t border-slate-100">
                 <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className={`px-10 py-4 bg-green-600 text-white font-black text-xl rounded-xl shadow-xl hover:bg-green-700 transition-all transform flex items-center gap-3 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+                    disabled={isSubmitting || !acknowledgeDelivery || !acknowledgeSanctions}
+                    className={`px-10 py-4 bg-green-600 text-white font-black text-xl rounded-xl shadow-xl transition-all transform flex items-center gap-3 ${isSubmitting || !acknowledgeDelivery || !acknowledgeSanctions
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:bg-green-700 hover:scale-105 active:scale-95'
+                        }`}
                 >
                     {isSubmitting ? (
                         <>

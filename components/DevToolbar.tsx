@@ -1,27 +1,42 @@
 import { useToast } from '../contexts/ToastContext';
 import React, { useState } from 'react';
 import { UserRole, Profile } from '../types';
-import { seedDatabase } from '../services/seeder';
+import { seedDatabase, resetDatabase } from '../services/seeder';
 
 interface DevToolbarProps {
     onSwitchRole: (role: UserRole) => void;
     onRefresh: () => void;
     currentRole?: UserRole;
+    suppliers?: any[];
 }
 
-export const DevToolbar: React.FC<DevToolbarProps> = ({ onSwitchRole, onRefresh, currentRole }) => {
-    const { success, info } = useToast();
+export const DevToolbar: React.FC<DevToolbarProps> = ({ onSwitchRole, onRefresh, currentRole, suppliers = [] }) => {
+    const { success, info, error: toastError } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isSeeding, setIsSeeding] = useState(false);
+    const [impersonatedId, setImpersonatedId] = useState(localStorage.getItem('dev_impersonate_supplier_id') || '');
 
     const handleSeed = async () => {
         if (confirm("Isso criará dados de teste no banco. Continuar?")) {
-            setIsSeeding(true);
-            await seedDatabase();
-            onRefresh();
-            setIsSeeding(false);
-            success("Dados gerados com sucesso!");
+            try {
+                setIsSeeding(true);
+                await seedDatabase();
+                onRefresh();
+                success("Dados gerados com sucesso!");
+            } catch (error: any) {
+                console.error(error);
+                toastError("Erro ao gerar dados: " + error.message);
+            } finally {
+                setIsSeeding(false);
+            }
         }
+    };
+
+    const handleImpersonate = (id: string) => {
+        if (id) localStorage.setItem('dev_impersonate_supplier_id', id);
+        else localStorage.removeItem('dev_impersonate_supplier_id');
+        setImpersonatedId(id);
+        window.location.reload();
     };
 
     if (!isOpen) {
@@ -61,9 +76,9 @@ export const DevToolbar: React.FC<DevToolbarProps> = ({ onSwitchRole, onRefresh,
                             onClick={onSwitchRole}
                         />
                         <RoleButton
-                            role={UserRole.CONTRATACOES}
-                            label="Contratações"
-                            active={currentRole === UserRole.CONTRATACOES}
+                            role={UserRole.ALMOXARIFADO}
+                            label="Almoxarifado"
+                            active={currentRole === UserRole.ALMOXARIFADO}
                             onClick={onSwitchRole}
                         />
                         <RoleButton
@@ -81,6 +96,23 @@ export const DevToolbar: React.FC<DevToolbarProps> = ({ onSwitchRole, onRefresh,
                     </div>
                 </div>
 
+                {currentRole === UserRole.FORNECEDOR && (
+                    <div className="pt-2 border-t border-gray-100">
+                        <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Simular Login Fornecedor</p>
+                        <select
+                            value={impersonatedId}
+                            onChange={(e) => handleImpersonate(e.target.value)}
+                            className="w-full text-xs p-2 border border-gray-300 rounded-lg bg-gray-50 mb-2"
+                        >
+                            <option value="">-- Padrão (Primeiro) --</option>
+                            {suppliers?.map((s: any) => (
+                                <option key={s.id} value={s.id}>{s.name} ({s.status})</option>
+                            ))}
+                        </select>
+                        {impersonatedId && <p className="text-[10px] text-blue-600 block mb-2">Simulando ID: {impersonatedId}</p>}
+                    </div>
+                )}
+
                 <div className="pt-2 border-t border-gray-100">
                     <div className="flex items-center justify-between mb-2">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">E-mail</p>
@@ -88,8 +120,8 @@ export const DevToolbar: React.FC<DevToolbarProps> = ({ onSwitchRole, onRefresh,
                             onClick={() => {
                                 const newVal = localStorage.getItem('alicerce_email_simulation_mode') !== 'true';
                                 localStorage.setItem('alicerce_email_simulation_mode', String(newVal));
-                                isSeeding ? null : setIsSeeding(false); // Force re-render hack or just rely on react state if we bound it properly
-                                info(newVal ? "Modo Simulação de E-mail ATIVADO. E-mails não serão enviados." : "Modo Simulação DESATIVADO. E-mails reais serão enviados.");
+                                isSeeding ? null : setIsSeeding(false); // Force re-render hack
+                                info(newVal ? "Modo Simulação de E-mail ATIVADO." : "Modo Simulação DESATIVADO.");
                             }}
                             className="text-[10px] text-blue-600 underline cursor-pointer"
                         >
@@ -107,9 +139,31 @@ export const DevToolbar: React.FC<DevToolbarProps> = ({ onSwitchRole, onRefresh,
                     >
                         {isSeeding ? 'Gerando...' : '🌱 Gerar Dados de Teste'}
                     </button>
+                    <button
+                        onClick={async () => {
+                            if (confirm("⚠️ TEM CERTEZA? Isso apagará TODAS as demandas, fornecedores, propostas e itens.\n\nO banco será limpo e apenas os dados de teste serão recriados.")) {
+                                try {
+                                    setIsSeeding(true);
+                                    await resetDatabase();
+                                    onRefresh();
+                                    success("Banco resetado com sucesso!");
+                                } catch (e: any) {
+                                    console.error(e);
+                                    toastError("Erro ao resetar: " + e.message);
+                                } finally {
+                                    setIsSeeding(false);
+                                }
+                            }
+                        }}
+
+                        disabled={isSeeding}
+                        className="w-full bg-red-50 text-red-700 border border-red-200 px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
+                    >
+                        ⚠️ Resetar Banco Completo
+                    </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

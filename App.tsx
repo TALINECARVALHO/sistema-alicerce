@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './services/supabase';
 import * as api from './services/api';
 import { useUrlState } from './hooks/useUrlState';
@@ -16,7 +15,10 @@ import {
     Item,
     Proposal,
     Question,
-    SupplierStatus
+    SupplierStatus,
+    Department,
+    UnitOfMeasure,
+    DeliveryLocation
 } from './types';
 
 // Components
@@ -48,6 +50,7 @@ import CatalogItemFormModal from './components/CatalogItemFormModal';
 import SupplierPreRegistrationForm from './components/SupplierPreRegistrationForm';
 import EmailTemplatesPage from './components/EmailTemplatesPage';
 import { DevToolbar } from './components/DevToolbar';
+import OpportunityAlert from './components/OpportunityAlert';
 
 import { ToastProvider, useToast } from './contexts/ToastContext';
 import { AuditService } from './services/AuditService';
@@ -73,16 +76,45 @@ export const AppContent: React.FC = () => {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [groups, setGroups] = useState<Group[]>([]);
     const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+    const [departments, setDepartments] = useState<Department[]>([]);
+    const [units, setUnits] = useState<UnitOfMeasure[]>([]);
+    const [deliveryLocations, setDeliveryLocations] = useState<DeliveryLocation[]>([]);
     const [stats, setStats] = useState<DashboardStats | null>(null);
 
     // Navigation/UI State
     const [selectedDemand, setSelectedDemand] = useState<Demand | null>(null);
+    const [editingDraft, setEditingDraft] = useState<Demand | null>(null);
     const [isCreatingDemand, setIsCreatingDemand] = useState(false);
 
     const [showGroupModal, setShowGroupModal] = useState(false);
     const [editingGroup, setEditingGroup] = useState<Group | null>(null);
     const [editingCatalogItem, setEditingCatalogItem] = useState<CatalogItem | null>(null);
     const [showCatalogModal, setShowCatalogModal] = useState(false);
+
+    // Calculo de oportunidades pendentes para fornecedores
+    const openOpportunitiesCount = useMemo(() => {
+        if (!userProfile || userProfile.role !== UserRole.FORNECEDOR || !isAppReady) return 0;
+
+        const devImpersonatedId = process.env.NODE_ENV === 'development' ? localStorage.getItem('dev_impersonate_supplier_id') : null;
+        const currentSupplier = suppliers.find(s => s.user_id === userProfile.id) ||
+            (process.env.NODE_ENV === 'development' && devImpersonatedId
+                ? suppliers.find(s => String(s.id) === devImpersonatedId)
+                : (process.env.NODE_ENV === 'development' ? suppliers[0] : undefined));
+
+        if (!currentSupplier) return 0;
+
+        const supplierGroupIds = groups.filter(g => (currentSupplier.groups || []).includes(g.name)).map(g => g.id);
+
+        return demands.filter(d => {
+            const matchesStatus = d.status === DemandStatus.AGUARDANDO_PROPOSTA;
+            const matchesGroup = d.items.some(item => supplierGroupIds.includes(item.group_id));
+            const hasResponded = d.proposals.some(p =>
+                (p.supplierName && p.supplierName === currentSupplier.name) ||
+                (p.supplierId && String(p.supplierId) === String(currentSupplier.id))
+            );
+            return matchesStatus && matchesGroup && !hasResponded;
+        }).length;
+    }, [userProfile, suppliers, groups, demands, isAppReady]);
 
     // Public View State
     const [publicView, setPublicView] = useState<'transparency' | 'faq' | 'supplier' | 'login'>('transparency');
@@ -91,7 +123,14 @@ export const AppContent: React.FC = () => {
         try {
             const [groupsData, { data: demandsData }] = await Promise.all([
                 supabase.from('groups').select('*').order('name'),
-                api.fetchDemands(1, 50, { status: DemandStatus.VENCEDOR_DEFINIDO })
+                api.fetchDemands(1, 100, {
+                    status: [
+                        DemandStatus.AGUARDANDO_PROPOSTA,
+                        DemandStatus.EM_ANALISE,
+                        DemandStatus.VENCEDOR_DEFINIDO,
+                        DemandStatus.CONCLUIDA
+                    ]
+                })
             ]);
 
             if (groupsData.data) setGroups(groupsData.data);
@@ -103,15 +142,21 @@ export const AppContent: React.FC = () => {
 
     const loadAuthenticatedData = useCallback(async () => {
         try {
-            const [suppliersData, groupsData, catalogData] = await Promise.all([
+            const [suppliersData, groupsData, catalogData, departmentsData, unitsData, locationsData] = await Promise.all([
                 api.fetchSuppliers(),
                 supabase.from('groups').select('*').order('name'),
-                api.fetchCatalogItems()
+                api.fetchCatalogItems(),
+                api.fetchDepartments(),
+                api.fetchUnits(),
+                api.fetchDeliveryLocations()
             ]);
 
             setSuppliers(suppliersData);
             setGroups(groupsData.data || []);
             setCatalogItems(catalogData || []);
+            setDepartments(departmentsData);
+            setUnits(unitsData);
+            setDeliveryLocations(locationsData);
 
             const { data: demandsData } = await api.fetchDemands(1, 100);
             setDemands(demandsData);
@@ -123,13 +168,23 @@ export const AppContent: React.FC = () => {
                 closed: demandsData.filter(d => d.status === DemandStatus.CONCLUIDA).length,
                 pendingSuppliers: suppliersData.filter(s => s.status === 'Pendente').length,
                 activeSuppliers: suppliersData.filter(s => s.status === 'Ativo').length,
-                totalGroups: (groupsData.data || []).length
+                totalGroups: (groupsData.data || []).length,
+                pendingApproval: demandsData.filter(d => d.status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO).length
             });
 
         } catch (e) {
             console.error("Falha ao carregar dados autenticados", e);
         }
     }, []);
+
+    const handleNavigateToDemands = (status?: DemandStatus) => {
+        if (status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO) {
+            sessionStorage.setItem('demand_manager_tab', 'pendente_almoxarifado');
+        } else if (status === DemandStatus.AGUARDANDO_PROPOSTA) {
+            sessionStorage.setItem('demand_manager_tab', 'em_cotacao');
+        }
+        setCurrentPage('demands');
+    };
 
     const loadUserProfile = async (userId: string) => {
         const profile = await api.fetchUserProfile(userId);
@@ -204,13 +259,38 @@ export const AppContent: React.FC = () => {
 
     const handleCreateDemand = async (demandData: any, status: DemandStatus) => {
         try {
-            const protocol = `ALI.DEM.${new Date().getFullYear()}.${Math.floor(1000 + Math.random() * 9000)} `;
-            const { data: newDemand, error } = await supabase.from('demands').insert([{
-                ...demandData,
+            // 1. Gerar Protocolo Sequencial (DEM.YYYY.NNN)
+            const year = new Date().getFullYear();
+            const { count } = await supabase
+                .from('demands')
+                .select('*', { count: 'exact', head: true })
+                .ilike('protocol', `DEM.${year}.% `);
+
+            const nextNumber = (count || 0) + 1;
+            const protocol = `DEM.${year}.${String(nextNumber).padStart(3, '0')} `;
+            console.log('DEBUG: Protocolo Gerado:', protocol);
+            console.log('DEBUG: Count found for ilike:', count);
+
+            // Map keys to snake_case for Supabase
+            const dbPayload = {
+                title: demandData.title,
+                requesting_department: demandData.requestingDepartment,
+                delivery_location: demandData.deliveryLocation,
+                contact_email: demandData.contactEmail,
+                request_description: demandData.requestDescription,
+                justification: demandData.justification,
+                type: demandData.type,
+                priority: demandData.priority,
+                sector: demandData.sector,
+                proposal_deadline: demandData.proposalDeadline,
+                deadline: demandData.deadline, // This might be redundant if mapped to proposal_deadline logic, but keeping it
                 protocol,
                 status,
                 created_at: new Date().toISOString()
-            }]).select().single();
+            };
+            console.log('DEBUG: Payload para Supabase:', dbPayload);
+
+            const { data: newDemand, error } = await supabase.from('demands').insert([dbPayload]).select().single();
 
             if (error) throw error;
 
@@ -258,6 +338,62 @@ export const AppContent: React.FC = () => {
             success("Status da demanda atualizado com sucesso!");
         } catch (e: any) {
             toastError("Erro ao atualizar status: " + e.message);
+        }
+    };
+
+    const handleUpdateDemand = async (demandId: number, updatedData: any) => {
+        try {
+            const { items, ...demandDetails } = updatedData;
+
+            // Map keys to snake_case for Supabase Update
+            const dbPayload: any = {};
+            if (demandDetails.title !== undefined) dbPayload.title = demandDetails.title;
+            if (demandDetails.requestingDepartment !== undefined) dbPayload.requesting_department = demandDetails.requestingDepartment;
+            if (demandDetails.deliveryLocation !== undefined) dbPayload.delivery_location = demandDetails.deliveryLocation;
+            if (demandDetails.contactEmail !== undefined) dbPayload.contact_email = demandDetails.contactEmail;
+            if (demandDetails.requestDescription !== undefined) dbPayload.request_description = demandDetails.requestDescription;
+            if (demandDetails.proposalDeadline !== undefined) dbPayload.proposal_deadline = demandDetails.proposalDeadline;
+            if (demandDetails.deadline !== undefined) dbPayload.deadline = demandDetails.deadline;
+            if (demandDetails.status !== undefined) dbPayload.status = demandDetails.status;
+            // Add other fields as necessary if they are editable
+            if (demandDetails.approval_observations !== undefined) dbPayload.approval_observations = demandDetails.approval_observations;
+
+
+            // 1. Update demand details
+            if (Object.keys(dbPayload).length > 0) {
+                const { error: demandError } = await supabase.from('demands').update(dbPayload).eq('id', demandId);
+                if (demandError) throw demandError;
+            }
+
+            // 2. Update items (Replace all for simplicity and consistency)
+            if (items) {
+                // Delete existing
+                await supabase.from('items').delete().eq('demand_id', demandId);
+
+                // EXPLICIT MAPPING to ensure snake_case columns
+                const itemsToInsert = items
+                    .filter((item: any) => item.description && item.quantity) // Basic validation
+                    .map((item: any) => ({
+                        description: item.description,
+                        unit: item.unit,
+                        quantity: item.quantity,
+                        // Robustly handle both casing conventions
+                        group_id: item.group_id || item.groupId,
+                        catalog_item_id: item.catalog_item_id || item.catalogItemId || null,
+                        demand_id: demandId
+                    }));
+
+                if (itemsToInsert.length > 0) {
+                    const { error: insertError } = await supabase.from('items').insert(itemsToInsert);
+                    if (insertError) throw insertError;
+                }
+            }
+
+            loadAuthenticatedData();
+            AuditService.logAction('UPDATE_DEMAND', 'DEMAND', { demandId, title: demandDetails.title });
+            success("Demanda atualizada com sucesso!");
+        } catch (e: any) {
+            toastError("Erro ao atualizar demanda: " + e.message);
         }
     };
 
@@ -432,225 +568,305 @@ export const AppContent: React.FC = () => {
     const renderContent = () => {
         if (!userProfile) return null;
 
-        // Dev Mode: If role is Supplier but no linked supplier found, use the first one available for testing
-        const currentSupplier = suppliers.find(s => s.user_id === userProfile.id) ||
-            (process.env.NODE_ENV === 'development' && userProfile.role === UserRole.FORNECEDOR ? suppliers[0] : undefined);
+        // Dev Mode: logic to support impersonation
+        const devImpersonatedId = process.env.NODE_ENV === 'development' ? localStorage.getItem('dev_impersonate_supplier_id') : null;
 
-        switch (currentPage) {
-            case 'dashboard':
-                return (
-                    <Dashboard
-                        stats={stats}
-                        suppliers={suppliers}
-                        groups={groups}
-                        demands={demands}
-                        onNewDemand={() => { setIsCreatingDemand(true); setCurrentPage('demands'); }}
-                        onNavigateToSuppliers={(status) => { setCurrentPage('suppliers'); }}
-                        onNavigateToQA={() => setCurrentPage('qa')}
-                        userRole={userProfile.role as UserRole}
-                    />
-                );
-            case 'supplier_dashboard':
-                return (
-                    <SupplierDashboard
-                        demands={demands}
-                        supplier={currentSupplier!}
-                        groups={groups}
-                        onSelectDemand={(d) => setCurrentPage('demands', d.id)}
-                        onViewOpportunities={() => setCurrentPage('demands')}
-                        onViewQA={() => setCurrentPage('supplier_qa')}
-                        onViewSupplierData={() => setCurrentPage('supplier_data')}
-                    />
-                );
-            case 'demands':
-                if (selectedDemand) {
-                    return (
-                        <DemandDetail
-                            demand={selectedDemand}
-                            groups={groups}
-                            suppliers={suppliers}
-                            userRole={userProfile.role as UserRole}
-                            currentSupplier={currentSupplier}
-                            catalogItems={catalogItems}
-                            onBack={() => setCurrentPage('demands')}
-                            onSubmitProposal={handleSubmitProposal}
-                            onAddQuestion={handleAddQuestion}
-                            onAnswerQuestion={handleAnswerQuestion}
-                            onDefineWinner={handleDefineWinner}
-                            onStatusChange={handleStatusChange}
-                            onRejectDemand={(id, reason) => handleStatusChange(id, DemandStatus.REPROVADA, reason)}
-                        />
-                    );
-                }
-                if (isCreatingDemand) {
-                    return (
-                        <DemandForm
-                            groups={groups}
-                            catalogItems={catalogItems}
-                            userProfile={userProfile}
-                            onSubmit={handleCreateDemand}
-                            onCancel={() => setIsCreatingDemand(false)}
-                            onDeleteCatalogItem={(id) => setCatalogItems(prev => prev.filter(i => i.id !== id))}
-                        />
-                    );
-                }
-                return (
-                    <DemandList
-                        groups={groups}
-                        suppliers={suppliers}
-                        userRole={userProfile.role as UserRole}
-                        onSelectDemand={(d) => setCurrentPage('demands', d.id)}
-                        onNewDemand={() => setIsCreatingDemand(true)}
-                        currentSupplier={currentSupplier}
-                        userDepartment={userProfile.department}
-                    />
-                );
-            case 'suppliers':
-                return (
-                    <Suppliers
-                        suppliers={suppliers}
-                        demands={demands}
-                        groups={groups}
-                        onNewSupplier={() => { }}
-                        onDeleteSupplier={async (id) => {
-                            try {
-                                await api.deleteSupplier(id);
-                                success("Fornecedor excluído com sucesso.");
-                                loadAuthenticatedData();
-                            } catch (e: any) {
-                                toastError("Erro ao excluir fornecedor: " + (e.message || "Erro desconhecido."));
-                            }
-                        }}
-                        onUpdateStatus={async (id, status, reason) => {
-                            try {
-                                if (status === 'Reprovado' && reason) {
-                                    await api.rejectSupplier(id, reason);
-                                } else if (status === 'Ativo') {
-                                    const supplier = suppliers.find(s => s.id === id);
-                                    if (supplier) {
-                                        if (supplier.user_id) {
-                                            await supabase.from('suppliers').update({
-                                                status: 'Ativo',
-                                                rejection_reason: null
-                                            }).eq('id', id);
-                                        } else {
-                                            await api.approveSupplierWorkflow(supplier);
-                                        }
-                                    }
-                                } else {
-                                    await supabase.from('suppliers').update({ status, rejection_reason: reason }).eq('id', id);
-                                }
-                                loadAuthenticatedData();
-                                AuditService.logAction('UPDATE_SUPPLIER_STATUS', 'SUPPLIER', { supplierId: id, status, reason });
-                                success(`Fornecedor ${status === 'Ativo' ? 'aprovado' : 'reprovado'} com sucesso!`);
-                            } catch (e: any) {
-                                toastError("Erro ao atualizar status: " + (e.message || "Falha técnica"));
-                            }
-                        }}
-                        onUpdateSupplier={async (supplier, files) => {
-                            try {
-                                await api.updateSupplier(supplier, files);
-                                await loadAuthenticatedData();
-                                AuditService.logAction('UPDATE_SUPPLIER', 'SUPPLIER', { supplierId: supplier.id, name: supplier.name });
-                                success("Fornecedor atualizado com sucesso!");
-                            } catch (e: any) {
-                                toastError("Erro ao atualizar fornecedor: " + e.message);
-                            }
-                        }}
-                        userRole={userProfile.role as UserRole}
-                    />
-                );
-            case 'groups':
-                return (
-                    <Groups
-                        groups={groups}
-                        onNewGroup={() => setShowGroupModal(true)}
-                        onEditGroup={setEditingGroup}
-                        onDeleteGroup={async (id) => { if (confirm("Deseja excluir este grupo?")) { await supabase.from('groups').delete().eq('id', id); loadAuthenticatedData(); } }}
-                        onToggleGroupStatus={async (id) => { const g = groups.find(g => g.id === id); if (g) await supabase.from('groups').update({ isActive: !g.isActive }).eq('id', id); loadAuthenticatedData(); }}
-                    />
-                );
-            case 'catalog':
-                return (
-                    <Catalog
-                        items={catalogItems}
-                        groups={groups}
-                        userRole={userProfile.role as UserRole}
-                        onNewItem={() => setShowCatalogModal(true)}
-                        onEditItem={(item) => { setEditingCatalogItem(item); setShowCatalogModal(true); }}
-                        onDeleteItem={async (id) => {
-                            if (confirm("Deseja excluir este item?")) {
-                                try {
-                                    await api.deleteCatalogItem(id);
-                                    await loadAuthenticatedData();
-                                    success("Item excluído com sucesso.");
-                                } catch (e) {
-                                    toastError("Erro ao excluir item. Ele pode estar vinculado a uma demanda existente.");
-                                }
-                            }
-                        }}
-                    />
-                );
-            case 'qa': return <QAPage demands={demands} onSelectDemand={(d) => setCurrentPage('demands', d.id)} onAnswerQuestion={handleAnswerQuestion} />;
-            case 'transparency':
-                if (selectedDemand) {
-                    return (
-                        <DemandDetail
-                            demand={selectedDemand}
-                            groups={groups}
-                            suppliers={suppliers}
-                            userRole={userProfile.role as UserRole}
-                            onBack={() => setSelectedDemand(null)}
-                            onSubmitProposal={async () => { }}
-                            onAddQuestion={() => { }}
-                            onAnswerQuestion={() => { }}
-                            onDefineWinner={async () => { }}
-                            onStatusChange={() => { }}
-                            onRejectDemand={() => { }}
-                        />
-                    );
-                }
-                return <TransparencyPage demands={demands} suppliers={suppliers} groups={groups} isPublic={true} onSelectDemand={setSelectedDemand} />;
-            case 'reports': return <ReportsPage demands={demands} suppliers={suppliers} groups={groups} />;
-            case 'users': return <UsersPage />;
-            case 'settings':
-                return (
-                    <SettingsPage
-                        groups={groups}
-                        catalogItems={catalogItems}
-                        userRole={userProfile.role as UserRole}
-                        onNavigate={setCurrentPage}
-                        onNewGroup={() => setShowGroupModal(true)}
-                        onEditGroup={setEditingGroup}
-                        onDeleteGroup={async (id) => { if (confirm("Deseja excluir este grupo?")) { await supabase.from('groups').delete().eq('id', id); loadAuthenticatedData(); } }}
-                        onToggleGroupStatus={async (id) => { const g = groups.find(g => g.id === id); if (g) await supabase.from('groups').update({ isActive: !g.isActive }).eq('id', id); loadAuthenticatedData(); }}
-                        onNewCatalogItem={() => setShowCatalogModal(true)}
-                        onEditCatalogItem={(item) => { setEditingCatalogItem(item); setShowCatalogModal(true); }}
-                        onDeleteCatalogItem={async (id) => {
-                            if (confirm("Deseja excluir este item?")) {
-                                try {
-                                    await api.deleteCatalogItem(id);
-                                    await loadAuthenticatedData();
-                                    success("Item excluído com sucesso.");
-                                } catch (e) {
-                                    toastError("Erro ao excluir item. Ele pode estar vinculado a uma demanda existente.");
-                                }
-                            }
-                        }}
-                    />
-                );
-            case 'training': return <TrainingPage userRole={userProfile.role as UserRole} />;
-            case 'supplier_data':
-                return <SupplierData supplier={currentSupplier!} groups={groups} onUpdateSupplier={async (s, files) => { await api.updateSupplier(s, files); loadAuthenticatedData(); }} />;
-            case 'supplier_reports':
-                return <SupplierReports demands={demands} supplier={currentSupplier!} />;
-            case 'supplier_qa':
-                return <SupplierQA demands={demands} supplier={currentSupplier!} onSelectDemand={(d) => setCurrentPage('demands', d.id)} />;
-            case 'audit-logs':
-                return <AuditLogPage />;
+        let currentSupplier = suppliers.find(s => s.user_id === userProfile.id);
 
-            default: return <div>Página em desenvolvimento</div>;
+        if (!currentSupplier && process.env.NODE_ENV === 'development' && userProfile.role === UserRole.FORNECEDOR) {
+            if (devImpersonatedId) {
+                currentSupplier = suppliers.find(s => String(s.id) === devImpersonatedId);
+            }
+            // Fallback to first if still not found or no ID set
+            if (!currentSupplier) currentSupplier = suppliers[0];
         }
+
+        // GLOBAL SAFETY CHECK: Se usuário é fornecedor mas não encontramos os dados, bloqueia renderização para evitar crashes
+        if (userProfile.role === UserRole.FORNECEDOR && !currentSupplier) {
+            return (
+                <div className="flex flex-col h-full items-center justify-center text-slate-400 gap-4">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p>Carregando perfil do fornecedor...</p>
+                    <p className="text-xs">Identificamos o usuário mas não o cadastro de fornecedor vinculado.</p>
+                    <p className="text-[10px] text-red-400">Dica: Use o botão "Gerar Dados de Teste" e depois "Simular Login".</p>
+                </div>
+            );
+        }
+
+        const mainContent = (() => {
+            switch (currentPage) {
+                case 'dashboard':
+                    return (
+                        <Dashboard
+                            stats={stats}
+                            suppliers={suppliers}
+                            groups={groups}
+                            demands={demands}
+                            onNewDemand={() => { setIsCreatingDemand(true); setCurrentPage('demands'); }}
+                            onNavigateToSuppliers={(status) => { setCurrentPage('suppliers'); }}
+                            onNavigateToQA={() => setCurrentPage('qa')}
+                            onNavigateToDemands={handleNavigateToDemands}
+                            userRole={userProfile.role as UserRole}
+                        />
+                    );
+                case 'supplier_dashboard':
+                    if (!currentSupplier) {
+                        return (
+                            <div className="flex flex-col h-full items-center justify-center text-slate-400 gap-4">
+                                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                <p>Carregando perfil do fornecedor...</p>
+                                <p className="text-xs">Se demorar, verifique se há dados gerados no DevTools (Gerais).</p>
+                            </div>
+                        );
+                    }
+                    return (
+                        <SupplierDashboard
+                            demands={demands}
+                            supplier={currentSupplier}
+                            groups={groups}
+                            onSelectDemand={(d) => setCurrentPage('demands', d.id)}
+                            onViewOpportunities={() => setCurrentPage('demands')}
+                            onViewQA={() => setCurrentPage('supplier_qa')}
+                            onViewSupplierData={() => setCurrentPage('supplier_data')}
+                        />
+                    );
+                case 'demands':
+                    if (selectedDemand) {
+                        return (
+                            <DemandDetail
+                                demand={selectedDemand}
+                                groups={groups}
+                                suppliers={suppliers}
+                                userRole={userProfile.role as UserRole}
+                                currentSupplier={currentSupplier}
+                                catalogItems={catalogItems}
+                                onBack={() => setCurrentPage('demands')}
+                                onSubmitProposal={handleSubmitProposal}
+                                onAddQuestion={handleAddQuestion}
+                                onAnswerQuestion={handleAnswerQuestion}
+                                onDefineWinner={handleDefineWinner}
+                                onStatusChange={handleStatusChange}
+                                onRejectDemand={(id, reason) => handleStatusChange(id, DemandStatus.REPROVADA, reason)}
+                                onUpdateDemand={handleUpdateDemand}
+                                allDemands={demands}
+                                onEdit={() => {
+                                    setEditingDraft(selectedDemand);
+                                    setSelectedDemand(null);
+                                    setIsCreatingDemand(true);
+                                }}
+                                onNavigateToDemand={(id) => setCurrentPage('demands', id)}
+                            />
+                        );
+                    }
+                    if (isCreatingDemand) {
+                        return (
+                            <DemandForm
+                                editingDraft={editingDraft || undefined}
+                                groups={groups}
+                                catalogItems={catalogItems}
+                                userProfile={userProfile}
+                                demands={demands}
+                                departments={departments}
+                                deliveryLocations={deliveryLocations}
+                                onNavigateToDemand={(id) => setCurrentPage('demands', id)}
+                                onSubmit={async (data, status) => {
+                                    if (editingDraft) {
+                                        // Update Logic
+                                        await handleUpdateDemand(editingDraft.id, { ...data, status });
+
+                                        // Trigger Notifications if publishing (Creation-like logic)
+                                        if (status === DemandStatus.AGUARDANDO_PROPOSTA) {
+                                            const fullDemand = { ...editingDraft, ...data, items: data.items.map((i: any) => ({ ...i, demand_id: editingDraft.id })), id: editingDraft.id } as any;
+                                            await api.notifySuppliersNewDemand(fullDemand, groups);
+                                        }
+
+                                        setIsCreatingDemand(false);
+                                        setEditingDraft(null);
+                                    } else {
+                                        handleCreateDemand(data, status);
+                                    }
+                                }}
+                                onCancel={() => { setIsCreatingDemand(false); setEditingDraft(null); }}
+                            />
+                        );
+                    }
+                    return (
+                        <DemandList
+                            groups={groups}
+                            suppliers={suppliers}
+                            userRole={userProfile.role as UserRole}
+                            onSelectDemand={(d) => setCurrentPage('demands', d.id)}
+                            onNewDemand={() => setIsCreatingDemand(true)}
+                            currentSupplier={currentSupplier}
+                            userDepartment={userProfile.department}
+                        />
+                    );
+                case 'suppliers':
+                    return (
+                        <Suppliers
+                            suppliers={suppliers}
+                            demands={demands}
+                            groups={groups}
+                            onNewSupplier={() => { }}
+                            onDeleteSupplier={async (id) => {
+                                try {
+                                    await api.deleteSupplier(id);
+                                    success("Fornecedor excluído com sucesso.");
+                                    loadAuthenticatedData();
+                                } catch (e: any) {
+                                    toastError("Erro ao excluir fornecedor: " + (e.message || "Erro desconhecido."));
+                                }
+                            }}
+                            onUpdateStatus={async (id, status, reason) => {
+                                try {
+                                    if (status === 'Reprovado' && reason) {
+                                        await api.rejectSupplier(id, reason);
+                                    } else if (status === 'Ativo') {
+                                        const supplier = suppliers.find(s => s.id === id);
+                                        if (supplier) {
+                                            if (supplier.user_id) {
+                                                await supabase.from('suppliers').update({
+                                                    status: 'Ativo',
+                                                    rejection_reason: null
+                                                }).eq('id', id);
+                                            } else {
+                                                await api.approveSupplierWorkflow(supplier);
+                                            }
+                                        }
+                                    } else {
+                                        await supabase.from('suppliers').update({ status, rejection_reason: reason }).eq('id', id);
+                                    }
+                                    loadAuthenticatedData();
+                                    AuditService.logAction('UPDATE_SUPPLIER_STATUS', 'SUPPLIER', { supplierId: id, status, reason });
+                                    success(`Fornecedor ${status === 'Ativo' ? 'aprovado' : 'reprovado'} com sucesso!`);
+                                } catch (e: any) {
+                                    toastError("Erro ao atualizar status: " + (e.message || "Falha técnica"));
+                                }
+                            }}
+                            onUpdateSupplier={async (supplier, files) => {
+                                try {
+                                    await api.updateSupplier(supplier, files);
+                                    await loadAuthenticatedData();
+                                    AuditService.logAction('UPDATE_SUPPLIER', 'SUPPLIER', { supplierId: supplier.id, name: supplier.name });
+                                    success("Fornecedor atualizado com sucesso!");
+                                } catch (e: any) {
+                                    toastError("Erro ao atualizar fornecedor: " + e.message);
+                                }
+                            }}
+                            userRole={userProfile.role as UserRole}
+                        />
+                    );
+                case 'groups':
+                    return (
+                        <Groups
+                            groups={groups}
+                            onNewGroup={() => setShowGroupModal(true)}
+                            onEditGroup={setEditingGroup}
+                            onDeleteGroup={async (id) => { if (confirm("Deseja excluir este grupo?")) { await supabase.from('groups').delete().eq('id', id); loadAuthenticatedData(); } }}
+                            onToggleGroupStatus={async (id) => { const g = groups.find(g => g.id === id); if (g) await supabase.from('groups').update({ isActive: !g.isActive }).eq('id', id); loadAuthenticatedData(); }}
+                        />
+                    );
+                case 'catalog':
+                    return (
+                        <Catalog
+                            items={catalogItems}
+                            groups={groups}
+                            userRole={userProfile.role as UserRole}
+                            demands={demands}
+                            onNewItem={() => setShowCatalogModal(true)}
+                            onEditItem={(item) => { setEditingCatalogItem(item); setShowCatalogModal(true); }}
+                            onDeleteItem={async (id) => {
+                                if (confirm("Deseja excluir este item?")) {
+                                    try {
+                                        await api.deleteCatalogItem(id);
+                                        await loadAuthenticatedData();
+                                        success("Item excluído com sucesso.");
+                                    } catch (e) {
+                                        toastError("Erro ao excluir item. Ele pode estar vinculado a uma demanda existente.");
+                                    }
+                                }
+                            }}
+                            onNavigateToDemand={(id) => setCurrentPage('demands', id)}
+                        />
+                    );
+                case 'qa': return <QAPage demands={demands} onSelectDemand={(d) => setCurrentPage('demands', d.id)} onAnswerQuestion={handleAnswerQuestion} />;
+                case 'transparency':
+                    if (selectedDemand) {
+                        return (
+                            <DemandDetail
+                                demand={selectedDemand}
+                                groups={groups}
+                                suppliers={suppliers}
+                                userRole={userProfile.role as UserRole}
+                                onBack={() => setSelectedDemand(null)}
+                                onSubmitProposal={async (_id, _p) => { }}
+                                onAddQuestion={(_id, _q) => { }}
+                                onAnswerQuestion={(_id, _qid, _a) => { }}
+                                onDefineWinner={async (_id, _w) => { }}
+                                onStatusChange={(_id, _s, _r) => { }}
+                                onRejectDemand={(_id, _r) => { }}
+                                allDemands={demands}
+                            />
+                        );
+                    }
+                    return <TransparencyPage demands={demands} suppliers={suppliers} groups={groups} isPublic={true} onSelectDemand={setSelectedDemand} />;
+                case 'reports': return <ReportsPage demands={demands} suppliers={suppliers} groups={groups} />;
+                case 'users': return <UsersPage />;
+                case 'settings':
+                    return (
+                        <SettingsPage
+                            groups={groups}
+                            catalogItems={catalogItems}
+                            demands={demands}
+                            userRole={userProfile.role as UserRole}
+                            onNavigate={setCurrentPage}
+                            onNewGroup={() => setShowGroupModal(true)}
+                            onEditGroup={setEditingGroup}
+                            onDeleteGroup={async (id) => { if (confirm("Deseja excluir este grupo?")) { await supabase.from('groups').delete().eq('id', id); loadAuthenticatedData(); } }}
+                            onToggleGroupStatus={async (id) => { const g = groups.find(g => g.id === id); if (g) await supabase.from('groups').update({ isActive: !g.isActive }).eq('id', id); loadAuthenticatedData(); }}
+                            onNewCatalogItem={() => setShowCatalogModal(true)}
+                            onEditCatalogItem={(item) => { setEditingCatalogItem(item); setShowCatalogModal(true); }}
+                            onDeleteCatalogItem={async (id) => {
+                                if (confirm("Deseja excluir este item?")) {
+                                    try {
+                                        await api.deleteCatalogItem(id);
+                                        await loadAuthenticatedData();
+                                        success("Item excluído com sucesso.");
+                                    } catch (e) {
+                                        toastError("Erro ao excluir item. Ele pode estar vinculado a uma demanda.");
+                                    }
+                                }
+                            }}
+                            onDataChange={loadAuthenticatedData}
+                        />
+                    );
+                case 'training': return <TrainingPage userRole={userProfile.role as UserRole} />;
+                case 'supplier_data':
+                    if (!currentSupplier) return <div className="p-8 text-center text-slate-500">Carregando dados do fornecedor...</div>;
+                    return <SupplierData supplier={currentSupplier} groups={groups} onUpdateSupplier={async (s, files) => { await api.updateSupplier(s, files); loadAuthenticatedData(); }} mode="supplier" />;
+                case 'supplier_reports':
+                    if (!currentSupplier) return <div className="p-8 text-center text-slate-500">Carregando dados do fornecedor...</div>;
+                    return <SupplierReports demands={demands} supplier={currentSupplier} />;
+                case 'supplier_qa':
+                    if (!currentSupplier) return <div className="p-8 text-center text-slate-500">Carregando dados do fornecedor...</div>;
+                    return <SupplierQA demands={demands} supplier={currentSupplier} onSelectDemand={(d) => setCurrentPage('demands', d.id)} />;
+
+
+                default: return <div>Página em desenvolvimento</div>;
+            }
+        })();
+
+        return (
+            <>
+                {openOpportunitiesCount > 0 && currentPage !== 'demands' && (
+                    <OpportunityAlert
+                        count={openOpportunitiesCount}
+                        onAction={() => setCurrentPage('demands')}
+                    />
+                )}
+                {mainContent}
+            </>
+        );
     };
 
     if (!isAppReady) return (
@@ -686,12 +902,12 @@ export const AppContent: React.FC = () => {
                                         suppliers={suppliers}
                                         userRole={UserRole.CIDADAO}
                                         onBack={() => setSelectedDemand(null)}
-                                        onSubmitProposal={async () => { }}
-                                        onAddQuestion={() => { }}
-                                        onAnswerQuestion={() => { }}
-                                        onDefineWinner={async () => { }}
-                                        onStatusChange={() => { }}
-                                        onRejectDemand={() => { }}
+                                        onSubmitProposal={async (_id, _p) => { }}
+                                        onAddQuestion={(_id, _q) => { }}
+                                        onAnswerQuestion={(_id, _qid, _a) => { }}
+                                        onDefineWinner={async (_id, _w) => { }}
+                                        onStatusChange={(_id, _s, _r) => { }}
+                                        onRejectDemand={(_id, _r) => { }}
                                     />
                                 </div>
                             ) : (
@@ -737,6 +953,7 @@ export const AppContent: React.FC = () => {
                 onLogout={handleLogout}
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
+                opportunityCount={openOpportunitiesCount}
             />
             <div className="flex-1 flex flex-col min-w-0">
                 <Header
@@ -754,6 +971,7 @@ export const AppContent: React.FC = () => {
                     currentRole={userProfile.role}
                     onSwitchRole={(role) => setUserProfile({ ...userProfile, role })}
                     onRefresh={loadAuthenticatedData}
+                    suppliers={suppliers}
                 />
             )}
 
@@ -775,6 +993,7 @@ export const AppContent: React.FC = () => {
                 <CatalogItemFormModal
                     item={editingCatalogItem}
                     groups={groups}
+                    units={units}
                     onClose={() => { setShowCatalogModal(false); setEditingCatalogItem(null); }}
                     onSave={async (item) => {
                         try {
@@ -800,8 +1019,12 @@ export const AppContent: React.FC = () => {
     );
 };
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 export const App = () => (
     <ToastProvider>
-        <AppContent />
+        <ErrorBoundary>
+            <AppContent />
+        </ErrorBoundary>
     </ToastProvider>
 );

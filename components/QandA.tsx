@@ -105,14 +105,14 @@ const QandA: React.FC<QandAProps> = ({ demand, userRole, onAddQuestion, onAnswer
           demand.questions.map((q) => (
             <div key={q.id} className="p-4 border border-slate-200 rounded-lg bg-slate-50">
               <p className="text-sm font-semibold text-slate-800">
-                <span className="font-bold text-blue-600">{q.supplierName}</span> perguntou em {formatDate(q.askedAt)}:
+                <span className="font-bold text-blue-600">Fornecedor {q.supplierName?.charAt(0) || '?'}...</span> perguntou em {formatDate(q.askedAt || (q as any).asked_at)}:
               </p>
               <p className="mt-2 text-slate-700">{q.question}</p>
 
               {q.answer ? (
                 <div className="mt-4 pt-3 border-t border-slate-200">
                   <p className="text-sm font-semibold text-slate-800">
-                    <span className="font-bold text-green-600">{q.answeredBy}</span> respondeu em {formatDate(q.answeredAt)}:
+                    <span className="font-bold text-green-600">{q.answeredBy || (q as any).answered_by || 'Administração'}</span> respondeu em {formatDate(q.answeredAt || (q as any).answered_at)}:
                   </p>
                   <p className="mt-2 text-slate-700">{q.answer}</p>
                 </div>

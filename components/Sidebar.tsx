@@ -27,6 +27,7 @@ interface SidebarProps {
   onLogout: () => void;
   isOpen?: boolean;
   onClose?: () => void;
+  opportunityCount?: number;
 }
 
 interface NavItemConfig {
@@ -45,7 +46,8 @@ const NavItem: React.FC<{
   label: string;
   isActive: boolean;
   onClick: () => void;
-}> = ({ icon, label, isActive, onClick }) => (
+  hasBadge?: boolean;
+}> = ({ icon, label, isActive, onClick, hasBadge }) => (
   <li>
     <a
       href="#"
@@ -58,8 +60,11 @@ const NavItem: React.FC<{
         : 'text-slate-400 hover:bg-slate-800 hover:text-white'
         }`}
     >
-      <span className={`flex-shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
+      <span className={`flex-shrink-0 transition-colors relative ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
         {icon}
+        {hasBadge && !isActive && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-900 animate-pulse"></span>
+        )}
       </span>
       <span className="ml-3 font-medium text-sm tracking-wide">{label}</span>
       {isActive && (
@@ -69,7 +74,7 @@ const NavItem: React.FC<{
   </li>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProfile, onLogout, isOpen = false, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProfile, onLogout, isOpen = false, onClose, opportunityCount = 0 }) => {
   const userRole = userProfile?.role as UserRole;
 
   const navConfig: Record<string, NavSection[]> = {
@@ -78,6 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProf
         items: [
           { page: 'dashboard', icon: <HomeIcon className="w-5 h-5" />, label: 'Dashboard' },
           { page: 'demands', icon: <ClipboardListIcon className="w-5 h-5" />, label: 'Demandas' },
+          { page: 'catalog', icon: <BoxIcon className="w-5 h-5" />, label: 'Catálogo de Itens' },
           { page: 'qa', icon: <QAIcon className="w-5 h-5" />, label: 'Dúvidas & Respostas' },
           { page: 'users', icon: <UsersIcon className="w-5 h-5" />, label: 'Usuários' },
           { page: 'suppliers', icon: <TruckIcon className="w-5 h-5" />, label: 'Fornecedores' },
@@ -98,6 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProf
         items: [
           { page: 'demands', icon: <ClipboardListIcon className="w-5 h-5" />, label: 'Demandas' },
           { page: 'suppliers', icon: <TruckIcon className="w-5 h-5" />, label: 'Fornecedores' },
+          { page: 'catalog', icon: <BoxIcon className="w-5 h-5" />, label: 'Catálogo de Itens' },
           { page: 'qa', icon: <QAIcon className="w-5 h-5" />, label: 'Dúvidas & Respostas' },
         ]
       },
@@ -120,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProf
         items: [
           { page: 'dashboard', icon: <HomeIcon className="w-5 h-5" />, label: 'Dashboard' },
           { page: 'demands', icon: <ClipboardListIcon className="w-5 h-5" />, label: 'Minhas Demandas' },
-          { page: 'training', icon: <SparklesIcon className="w-5 h-5" />, label: 'Guia de Uso (Curso)' },
+          { page: 'training', icon: <SparklesIcon className="w-5 h-5" />, label: 'Manual do Usuário' },
           { page: 'reports', icon: <ReportsIcon className="w-5 h-5" />, label: 'Relatórios' },
 
         ]
@@ -128,23 +135,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProf
     ],
     [UserRole.ALMOXARIFADO]: [
       {
-        title: 'Visão Geral',
         items: [
           { page: 'dashboard', icon: <HomeIcon className="w-5 h-5" />, label: 'Dashboard' },
-        ]
-      },
-      {
-        title: 'Operacional',
-        items: [
           { page: 'demands', icon: <ClipboardListIcon className="w-5 h-5" />, label: 'Análise de Demandas' },
+          { page: 'catalog', icon: <BoxIcon className="w-5 h-5" />, label: 'Catálogo de Itens' },
           { page: 'settings', icon: <CogIcon className="w-5 h-5" />, label: 'Configurações' },
-        ]
-      },
-      {
-        title: 'Dados',
-        items: [
           { page: 'reports', icon: <ReportsIcon className="w-5 h-5" />, label: 'Relatórios' },
-
         ]
       }
     ],
@@ -219,6 +215,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, userProf
                       icon={item.icon}
                       label={item.label}
                       isActive={currentPage === item.page}
+                      hasBadge={item.page === 'demands' && opportunityCount > 0}
                       onClick={() => {
                         setCurrentPage(item.page as Page);
                         if (onClose) onClose(); // Auto-close on mobile selection

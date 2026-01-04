@@ -108,6 +108,18 @@ export const ChartBarIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => 
     </svg>
 );
 
+export const TrendingUpIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg {...defaultProps} {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.5 4.5L21.75 4.5M21.75 4.5V9m0-4.5H17.25" />
+    </svg>
+);
+
+export const ActivityIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg {...defaultProps} {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12h3.375l2.25-9 4.5 18 2.25-9h3.375" />
+    </svg>
+);
+
 export const SearchIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg {...defaultProps} {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -368,5 +380,17 @@ export const ChatIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 export const MenuIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg {...defaultProps} {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+);
+
+export const ChevronUpIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg {...defaultProps} {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+    </svg>
+);
+
+export const ChevronDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg {...defaultProps} {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
     </svg>
 );

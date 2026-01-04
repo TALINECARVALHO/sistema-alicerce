@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Group } from '../types';
 import PageHeader from './PageHeader';
-import { SearchIcon, CogIcon, TrashIcon } from './icons';
+import { SearchIcon, PencilIcon, TrashIcon } from './icons';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addPDFHeader, addPDFFooter } from '../utils/reportUtils';
@@ -78,7 +78,7 @@ const GroupTable: React.FC<{
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div className="flex justify-end gap-2">
                                     <button onClick={() => onEdit(group)} className="text-slate-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-colors" title="Editar">
-                                        <CogIcon className="w-5 h-5" />
+                                        <PencilIcon className="w-5 h-5" />
                                     </button>
                                     <button onClick={() => onToggleStatus(group.id)} className={`p-1 rounded transition-colors ${group.isActive ? 'text-amber-400 hover:text-amber-600 hover:bg-amber-50' : 'text-green-400 hover:text-green-600 hover:bg-green-50'}`} title={group.isActive ? 'Desativar' : 'Ativar'}>
                                         <div className="w-5 h-5 flex items-center justify-center font-bold text-xs border border-current rounded-full">
@@ -198,12 +198,12 @@ const Groups: React.FC<GroupsProps> = ({ groups, onEditGroup, onToggleGroupStatu
             >
                 <button
                     onClick={handleExportPDF}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-semibold text-sm"
+                    className="flex items-center justify-center space-x-2 bg-white text-slate-700 border border-slate-300 font-semibold px-5 py-3 rounded-lg shadow-sm hover:bg-slate-50 transition-all duration-300"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM21 12v5.25c0 .414-.336.75-.75.75H3.75a.75.75 0 01-.75-.75V12m18 0c0 .414-.336.75-.75.75H3.75a.75.75 0 01-.75-.75V12m18 0V8.25a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 8.25V12m18 0h-18" />
                     </svg>
-                    Exportar PDF
+                    <span>Exportar PDF</span>
                 </button>
             </PageHeader>
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row gap-4 justify-between items-center">

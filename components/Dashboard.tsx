@@ -1,9 +1,16 @@
 
 import React, { useMemo } from 'react';
 import { Supplier, Group, SupplierStatus, UserRole, DashboardStats, Demand, DemandStatus } from '../types';
-import StatCard from './StatCard';
-import { DemandsIcon, SuppliersIcon, GroupsIcon, ClockIcon, UsersIcon, CheckCircleIcon, XCircleIcon, DollarIcon, ChartBarIcon, QAIcon, LightningBoltIcon } from './icons';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
+import {
+    DemandsIcon, SuppliersIcon, GroupsIcon, ClockIcon, UsersIcon, CheckCircleIcon,
+    XCircleIcon, DollarIcon, ChartBarIcon, QAIcon, LightningBoltIcon, ShieldCheckIcon,
+    PlusIcon
+} from './icons';
+import {
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    BarChart, Bar, Cell, LabelList
+} from 'recharts';
+import PageHeader from './PageHeader';
 
 interface DashboardProps {
     stats: DashboardStats | null;
@@ -13,57 +20,111 @@ interface DashboardProps {
     onNewDemand: () => void;
     onNavigateToSuppliers: (tab: SupplierStatus) => void;
     onNavigateToQA: () => void;
+    onNavigateToDemands: (status?: DemandStatus) => void;
     userRole: UserRole;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ stats, suppliers, groups, demands, onNewDemand, onNavigateToSuppliers, onNavigateToQA, userRole }) => {
+const Dashboard: React.FC<DashboardProps> = ({ stats, suppliers, groups, demands, onNewDemand, onNavigateToSuppliers, onNavigateToQA, onNavigateToDemands, userRole }) => {
     const safeStats: DashboardStats = stats || {
-        total: 0, open: 0, drafts: 0, closed: 0, pendingSuppliers: 0, activeSuppliers: 0, totalGroups: 0
+        total: 0, open: 0, drafts: 0, closed: 0, pendingSuppliers: 0, activeSuppliers: 0, totalGroups: 0, pendingApproval: 0
     };
 
     const canManage = [UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO].includes(userRole);
+    const isWarehouse = userRole === UserRole.ALMOXARIFADO || canManage;
 
     const analytics = useMemo(() => {
-        let totalVolume = 0;
+        let totalVolumeMes = 0;
         let economy = 0;
+        let volumePendenteAnalise = 0;
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
         const pendingQuestions = demands.reduce((acc, d) => acc + (d.questions?.filter(q => !q.answer).length || 0), 0);
 
-        // Calcular demandas críticas (vencem em 24h)
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const criticalDemands = demands.filter(d => d.status === DemandStatus.AGUARDANDO_PROPOSTA && d.proposalDeadline && new Date(d.proposalDeadline) <= tomorrow).length;
+        // Novas métricas solicitadas
+        const pedidosMes = demands.filter(d => new Date(d.createdAt) >= startOfMonth).length;
+        const finalizadosMes = demands.filter(d =>
+            new Date(d.createdAt) >= startOfMonth &&
+            (d.status === DemandStatus.CONCLUIDA || d.status === DemandStatus.VENCEDOR_DEFINIDO)
+        ).length;
 
         demands.forEach(d => {
-            if (d.winner) {
-                totalVolume += d.winner.totalValue;
-                if (d.proposals && d.proposals.length > 1) {
+            if (d.status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO) {
+                const demandTotal = d.items.reduce((acc, item) => acc + (item.quantity * ((item as any).target_price || 0)), 0);
+                volumePendenteAnalise += demandTotal;
+            }
+
+            if (d.winner && d.winner.totalValue > 0) {
+                if (new Date(d.createdAt) >= startOfMonth) {
+                    totalVolumeMes += d.winner.totalValue;
+                }
+
+                if (d.proposals && d.proposals.length > 0) {
                     const valid = d.proposals.filter(p => !p.observations?.includes('DECLINED'));
-                    const max = Math.max(...valid.map(p => p.totalValue || 0));
-                    economy += (max - d.winner.totalValue);
+                    const validValues = valid.map(p => p.totalValue || 0);
+
+                    // The baseline for economy is the highest bid received (or the winner itself if it's the only/highest)
+                    // This prevents negative economy if data is inconsistent
+                    const max = Math.max(d.winner.totalValue, ...validValues);
+
+                    if (max > d.winner.totalValue) {
+                        economy += (max - d.winner.totalValue);
+                    }
                 }
             }
         });
 
-        // Check for expiring documents (30 days)
-        const thirtyDaysFromNow = new Date();
-        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        return { totalVolumeMes, economy, pendingQuestions, pedidosMes, finalizadosMes, volumePendenteAnalise };
+    }, [demands]);
 
-        let expiringDocsCount = 0;
-        suppliers.forEach(s => {
-            if (s.status === 'Ativo' && s.documents) {
-                const hasExpiring = s.documents.some(doc => {
-                    if (!doc.validityDate) return false;
-                    const vDate = new Date(doc.validityDate);
-                    return vDate <= thirtyDaysFromNow;
+    const groupPerformance = useMemo(() => {
+        const groupMap = new Map();
+
+        demands.forEach(d => {
+            if (d.winner && d.winner.totalValue > 0) {
+                // Since a demand can have items from different groups, 
+                // but usually the winner is per demand, we'll attribute to the main group if possible
+                // or iterate over items. For simplicity and as per common logic, 
+                // we'll sum up item values by group.
+                d.items.forEach(item => {
+                    if (item.group_id) {
+                        const group = groups.find(g => g.id === item.group_id);
+                        const name = group ? group.name : 'Outros';
+                        const current = groupMap.get(name) || 0;
+
+                        // If winner exists, we try to match the price from items
+                        // For a dashboard, a close approximation or direct winner value is preferred.
+                        // Let's use demand winner value if it's not item-based, 
+                        // or item winners if it is.
+                        if (d.winner?.mode === 'item' && d.winner.items) {
+                            const wItem = d.winner.items.find(wi => (wi.itemId || (wi as any).item_id) === item.id);
+                            if (wItem) {
+                                groupMap.set(name, current + wItem.totalValue);
+                            }
+                        } else if (d.winner?.mode === 'global' && d.winner.supplierId) {
+                            // If global, we distribute proportionally or just count the demand?
+                            // Usually groups are per item. If global, we use the item's part of the total?
+                            // Let's assume most demands are focused.
+                            // To be accurate: sum only what was actually won.
+                            const itemTotal = (item.quantity * (item.target_price || 0)); // Fallback
+                            // Better: if global winner, we assume the items in the demand contributed to that winner total.
+                            // Since we don't have per-item price for global winners easily here, 
+                            // we'll use a simplified count or just sum types.
+                            // User asked for "valores ou demandas". Let's do TOP 5 by VALUE.
+                            groupMap.set(name, current + (d.winner.totalValue / d.items.length));
+                        }
+                    }
                 });
-                if (hasExpiring) expiringDocsCount++;
             }
         });
 
-        return { totalVolume, economy, pendingQuestions, criticalDemands, expiringDocsCount };
-    }, [demands]);
+        return Array.from(groupMap.entries())
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+    }, [demands, groups]);
 
-    const evolutionData = useMemo(() => {
+    const chartData = useMemo(() => {
         const monthMap = new Map();
         for (let i = 5; i >= 0; i--) {
             const d = new Date();
@@ -79,265 +140,391 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, suppliers, groups, demands
         return Array.from(monthMap.entries()).map(([name, value]) => ({ name, demandas: value }));
     }, [demands]);
 
-    const topDepartments = useMemo(() => {
-        const counts: Record<string, number> = {};
+    const departmentPerformance = useMemo(() => {
+        const deptMap = new Map();
         demands.forEach(d => {
-            const dept = d.requestingDepartment || 'Não Informado';
-            counts[dept] = (counts[dept] || 0) + 1;
+            const dept = d.requestingDepartment || 'Outros';
+            deptMap.set(dept, (deptMap.get(dept) || 0) + 1);
         });
-        return Object.entries(counts)
+
+        return Array.from(deptMap.entries())
             .map(([name, value]) => ({ name, value }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 5);
     }, [demands]);
 
-    const statusDistribution = useMemo(() => {
-        const counts: Record<string, number> = {};
-        demands.forEach(d => {
-            counts[d.status] = (counts[d.status] || 0) + 1;
-        });
-        return Object.entries(counts).map(([name, value]) => ({ name, value }));
-    }, [demands]);
-
-    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+    // Componente de Cartão Superior (v1)
+    const StatCard = ({ icon: Icon, title, value, subtitle, onClick }: any) => (
+        <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 flex items-center gap-2.5 hover:shadow-md transition-all cursor-pointer group" onClick={onClick}>
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <Icon className="w-4 h-4" />
+            </div>
+            <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{title}</p>
+                <h3 className="text-2xl font-black text-slate-800">{value}</h3>
+                <p className="text-[10px] text-slate-400 font-medium">{subtitle}</p>
+            </div>
+        </div>
+    );
 
     return (
-        <div className="space-y-10 animate-fade-in-down pb-12">
-            <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 bg-white p-8 rounded-3xl border border-slate-100 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)]">
-                <div>
-                    <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight lg:text-5xl">Painel de Controle</h1>
-                    <p className="mt-2 text-slate-500 font-medium text-lg">Visão geral da operação de compras.</p>
+        <div className="space-y-4 animate-fade-in-down pb-12 bg-slate-50/30 min-h-screen">
+
+            {/* Header */}
+            <div className="px-4 pt-4">
+                <PageHeader
+                    title="Painel de Controle"
+                    subtitle="Gestão Estratégica de Compras Municipais"
+                    buttonText="Nova Demanda"
+                    onButtonClick={onNewDemand}
+                />
+            </div>
+
+            <div className="px-4 space-y-3">
+
+                {/* Grid Superior v1 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <StatCard
+                        icon={DemandsIcon}
+                        title="Em Cotação"
+                        value={safeStats.open}
+                        subtitle="Propostas sendo recebidas"
+                        onClick={() => onNavigateToDemands(DemandStatus.AGUARDANDO_PROPOSTA)}
+                    />
+                    <StatCard
+                        icon={ShieldCheckIcon}
+                        title="Para Análise"
+                        value={demands.filter(d => d.status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO).length}
+                        subtitle="Aguardando Almoxarifado"
+                        onClick={() => onNavigateToDemands(DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO)}
+                    />
+                    <StatCard
+                        icon={SuppliersIcon}
+                        title="Fornecedores Cadastrados"
+                        value={safeStats.activeSuppliers}
+                        subtitle="Empresas ativas"
+                        onClick={() => onNavigateToSuppliers('Ativo')}
+                    />
+                    <StatCard
+                        icon={QAIcon}
+                        title="Dúvidas"
+                        value={analytics.pendingQuestions}
+                        subtitle="Aguardando resposta"
+                        onClick={onNavigateToQA}
+                    />
                 </div>
-            </div>
 
-            {/* KPI Cards Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Resumo Executivo Mensal (Novo Layout Cards) */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-
-                <StatCard icon={<DemandsIcon className="w-6 h-6" />} title="Em Cotação" value={safeStats.open} subtitle="Propostas sendo recebidas" variant="blue" />
-                <StatCard icon={<CheckCircleIcon className="w-6 h-6" />} title="Economia Estimada" value={analytics.economy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} subtitle="Eficiência do sistema" variant="emerald" />
-                <StatCard icon={<SuppliersIcon className="w-6 h-6" />} title="Fornecedores" value={safeStats.activeSuppliers} subtitle={`${safeStats.pendingSuppliers} aguardando análise`} variant="indigo" />
-                <StatCard icon={<QAIcon className="w-6 h-6" />} title="Dúvidas Pendentes" value={analytics.pendingQuestions} subtitle="Requer atenção imediata" variant="purple" />
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                {/* Left Column: Charts and Analysis */}
-                <div className="xl:col-span-2 space-y-8">
-                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
-                        <div className="flex items-center justify-between mb-8">
-                            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-3">
-                                <span className="bg-blue-50 p-2 rounded-xl text-blue-600"><ChartBarIcon className="w-6 h-6" /></span>
-                                Volume de Demandas
-                            </h3>
-                            <select className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-600 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-100">
-                                <option>Últimos 6 meses</option>
-                                <option>Este ano</option>
-                            </select>
+                    {/* Card 1: Volume Homologado (Financeiro) */}
+                    <div className="bg-gradient-to-br from-blue-700 to-indigo-800 rounded-2xl p-6 text-white shadow-lg shadow-blue-900/20 relative overflow-hidden group">
+                        <div className="absolute -top-4 -right-2 opacity-10 group-hover:opacity-20 transition-all transform group-hover:scale-110 duration-700 pointer-events-none select-none">
+                            <span className="text-[160px] font-black leading-none">$</span>
                         </div>
-                        <div className="h-80 w-full">
+                        <div className="relative z-10 flex flex-col h-full justify-between">
+                            <div>
+                                <div className="flex items-center gap-3 mb-4 opacity-90">
+                                    <div className="relative">
+                                        <div className="absolute -inset-1.5 bg-white/20 blur-sm rounded-full"></div>
+                                        <div className="relative flex items-center justify-center bg-white/10 w-8 h-8 rounded-lg">
+                                            <span className="absolute -top-1 -right-1 text-[10px] font-black text-amber-300">$</span>
+                                            <ChartBarIcon className="w-5 h-5" />
+                                        </div>
+                                    </div>
+                                    <span className="text-xs font-bold uppercase tracking-widest">Valor Total Homologado</span>
+                                </div>
+                                <h3 className="text-4xl font-black tracking-tighter mb-1">
+                                    R$ {analytics.totalVolumeMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </h3>
+                                <p className="text-blue-200 text-sm font-medium">Total finalizado este mês</p>
+                            </div>
+                            <div className="mt-6 pt-4 border-t border-white/10 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                <span className="text-xs font-bold text-blue-100 uppercase tracking-wider">Acumulado Mensal</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Card 2: Fluxo Operacional */}
+                    <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-all">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-amber-50 rounded-lg text-amber-500">
+                                <LightningBoltIcon className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Fluxo Mensal</h3>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-8 relative z-10">
+                            <div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total de Demandas</p>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-4xl font-black text-slate-800">{analytics.pedidosMes}</span>
+                                    <span className="text-xs text-slate-400 font-bold">novos</span>
+                                </div>
+                            </div>
+                            <div className="pl-8 border-l border-slate-100">
+                                <p className="text-[10px] font-black text-emerald-600/70 uppercase tracking-widest mb-1">Demanda Homologada</p>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-4xl font-black text-emerald-600">{analytics.finalizadosMes}</span>
+                                    <span className="text-xs text-emerald-600/70 font-bold">ok</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Decor */}
+                        <div className="absolute bottom-0 right-0 w-32 h-32 bg-slate-50 rounded-tl-full opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"></div>
+                    </div>
+
+                    {/* Card 3: Ações Pendentes */}
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col gap-3 h-full">
+                        <h3 className="px-2 text-xs font-black text-slate-400 uppercase tracking-widest mb-1 mt-1">Ações Prioritárias</h3>
+
+                        <div className="flex-1 flex flex-col gap-2 justify-center">
+                            {/* Dúvidas */}
+                            <button
+                                onClick={onNavigateToQA}
+                                className={`flex items-center justify-between p-3 rounded-xl border transition-all ${analytics.pendingQuestions > 0 ? 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100' : 'bg-slate-50 border-slate-100 opacity-60'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <QAIcon className={`w-5 h-5 ${analytics.pendingQuestions > 0 ? 'text-indigo-600' : 'text-slate-400'}`} />
+                                    <span className={`text-xs font-bold uppercase ${analytics.pendingQuestions > 0 ? 'text-indigo-900' : 'text-slate-500'}`}>Dúvidas Pendentes</span>
+                                </div>
+                                {analytics.pendingQuestions > 0 && <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{analytics.pendingQuestions}</span>}
+                            </button>
+
+                            {/* Fornecedores */}
+                            {canManage && (
+                                <button
+                                    onClick={() => onNavigateToSuppliers('Pendente')}
+                                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${safeStats.pendingSuppliers > 0 ? 'bg-blue-50 border-blue-100 hover:bg-blue-100' : 'bg-slate-50 border-slate-100 opacity-60'}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <UsersIcon className={`w-5 h-5 ${safeStats.pendingSuppliers > 0 ? 'text-blue-600' : 'text-slate-400'}`} />
+                                        <span className={`text-xs font-bold uppercase ${safeStats.pendingSuppliers > 0 ? 'text-blue-900' : 'text-slate-500'}`}>Cadastros Novos</span>
+                                    </div>
+                                    {safeStats.pendingSuppliers > 0 && <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{safeStats.pendingSuppliers}</span>}
+                                </button>
+                            )}
+
+                            {/* Validações Almoxarifado */}
+                            {isWarehouse && (
+                                <button
+                                    onClick={() => onNavigateToDemands(DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO)}
+                                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${safeStats.pendingApproval > 0 ? 'bg-amber-50 border-amber-100 hover:bg-amber-100' : 'bg-slate-50 border-slate-100 opacity-60'}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <ShieldCheckIcon className={`w-5 h-5 ${safeStats.pendingApproval > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
+                                        <span className={`text-xs font-bold uppercase ${safeStats.pendingApproval > 0 ? 'text-amber-900' : 'text-slate-500'}`}>Validações Pendentes</span>
+                                    </div>
+                                    {safeStats.pendingApproval > 0 && <span className="bg-amber-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{safeStats.pendingApproval}</span>}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                </div>
+
+                {/* Demandas Pendentes de Análise (Apenas para Almoxarifado/Gestão) */}
+                {isWarehouse && demands.filter(d => d.status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO).length > 0 && (
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <ShieldCheckIcon className="w-5 h-5 text-amber-500" />
+                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Demandas Pendentes de Análise</h3>
+                            </div>
+                            <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                {demands.filter(d => d.status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO).length} Pendentes
+                            </span>
+                        </div>
+                        <div className="divide-y divide-slate-50">
+                            {demands
+                                .filter(d => d.status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO)
+                                .slice(0, 5) // Mostra apenas as 5 mais antigas/urgentes
+                                .map(demand => (
+                                    <div key={demand.id} className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                                        <div className="flex items-start gap-4">
+                                            <div className="mt-1 p-2 bg-slate-100 rounded-lg text-slate-500">
+                                                <ClockIcon className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider">{demand.protocol}</span>
+                                                    <h4 className="text-sm font-bold text-slate-900 line-clamp-1">{demand.title}</h4>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
+                                                    <span>{demand.requestingDepartment}</span>
+                                                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                                    <span>{new Date(demand.createdAt).toLocaleDateString('pt-BR')}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => onNavigateToDemands(DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO)}
+                                            className="px-4 py-2 bg-slate-900 text-white rounded-lg text-[11px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all shadow-sm"
+                                        >
+                                            Analisar
+                                        </button>
+                                    </div>
+                                ))}
+                        </div>
+                        {demands.filter(d => d.status === DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO).length > 5 && (
+                            <div className="px-6 py-3 bg-slate-50 text-center">
+                                <button
+                                    onClick={() => onNavigateToDemands(DemandStatus.AGUARDANDO_ANALISE_ALMOXARIFADO)}
+                                    className="text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-blue-600 transition-colors"
+                                >
+                                    Ver todas as demandas pendentes
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Seção de Gráficos Inferior (v1) */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pb-4">
+
+                    {/* Volume de Demandas (Histórico) */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col">
+                        <div className="flex items-center gap-2 mb-3">
+                            <ChartBarIcon className="w-4 h-4 text-blue-600" />
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Evolução de Demandas</h3>
+                        </div>
+                        <div className="flex-1 min-h-[220px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={evolutionData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                     <defs>
-                                        <linearGradient id="colorDemands" x1="0" y1="0" x2="0" y2="1">
+                                        <linearGradient id="colorDemandas" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
                                             <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }} dy={10} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }} />
-                                    <Tooltip
-                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' }}
-                                        cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                                    <XAxis
+                                        dataKey="name"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                                        dy={10}
                                     />
-                                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                                    <Area name="Volume de Demandas" type="monotone" dataKey="demandas" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorDemands)" />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="demandas"
+                                        stroke="#3b82f6"
+                                        strokeWidth={3}
+                                        fillOpacity={1}
+                                        fill="url(#colorDemandas)"
+                                    >
+                                        <LabelList
+                                            dataKey="demandas"
+                                            position="top"
+                                            offset={10}
+                                            style={{ fill: '#3b82f6', fontSize: 10, fontWeight: 'bold' }}
+                                        />
+                                    </Area>
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
+                        <div className="mt-2 pt-2 border-t border-slate-50 italic text-[9px] text-slate-400 text-center">
+                            Histórico dos últimos 6 meses.
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Top Departments Chart */}
-                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden">
-                            <h3 className="text-lg font-bold text-slate-800 mb-6 z-10 relative">Top 5 Secretarias</h3>
-                            <div className="h-48 w-full z-10 relative">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={topDepartments} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10, fill: '#64748b' }} interval={0} />
-                                        <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
-                                        <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                                        <Bar name="Quantidade" dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
+                    {/* Demandas por Secretaria (Quantidades) */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                        <div className="flex items-center gap-2 mb-4">
+                            <DemandsIcon className="w-4 h-4 text-emerald-600" />
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Demandas por Secretaria</h3>
                         </div>
 
-                        {/* Status Distribution Chart */}
-                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden">
-                            <h3 className="text-lg font-bold text-slate-800 mb-6 z-10 relative">Status dos Processos</h3>
-                            <div className="h-48 w-full z-10 relative flex items-center justify-center">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={statusDistribution}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={40}
-                                            outerRadius={60}
-                                            paddingAngle={5}
+                        <div className="flex-1 min-h-[220px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={departmentPerformance} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                                    <XAxis type="number" hide />
+                                    <YAxis
+                                        dataKey="name"
+                                        type="category"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 9, fontWeight: 700 }}
+                                        width={80}
+                                    />
+                                    <Tooltip
+                                        cursor={{ fill: 'transparent' }}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={15}>
+                                        {departmentPerformance.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={['#10b981', '#059669', '#047857', '#065f46', '#064e3b'][index % 5]} />
+                                        ))}
+                                        <LabelList
                                             dataKey="value"
-                                            nameKey="name"
-                                        >
-                                            {statusDistribution.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                                        <Legend
-                                            layout="vertical"
-                                            verticalAlign="middle"
-                                            align="right"
-                                            iconType="circle"
-                                            wrapperStyle={{ paddingLeft: '20px', fontSize: '10px', maxWidth: '40%' }}
+                                            position="right"
+                                            style={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}
                                         />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div className="mt-2 pt-2 border-t border-slate-50 italic text-[9px] text-slate-400 text-center">
+                            Secretarias com maior número de pedidos.
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-start justify-between mb-4">
-                                <div>
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Economia Gerada</p>
-                                    <h4 className="text-2xl font-black text-slate-800 mt-1">{analytics.economy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</h4>
-                                </div>
-                                <div className="bg-emerald-50 p-2 rounded-lg text-emerald-600"><DollarIcon className="w-6 h-6" /></div>
-                            </div>
-                            <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
-                                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: '65%' }}></div>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-3 font-medium">65% da meta mensal atingida</p>
+                    {/* TOP 5 Grupos por Valor */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                        <div className="flex items-center gap-2 mb-4">
+                            <DollarIcon className="w-4 h-4 text-blue-600" />
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Top 5 Categorias (R$)</h3>
                         </div>
 
-                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-start justify-between mb-4">
-                                <div>
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Processos Ativos</p>
-                                    <h4 className="text-2xl font-black text-slate-800 mt-1">{safeStats.total}</h4>
-                                </div>
-                                <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600"><LightningBoltIcon className="w-6 h-6" /></div>
-                            </div>
-                            <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
-                                <div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: '40%' }}></div>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-3 font-medium">40% acima da média histórica</p>
+                        <div className="flex-1 min-h-[220px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={groupPerformance} layout="vertical" margin={{ top: 5, right: 60, left: 40, bottom: 5 }}>
+                                    <XAxis type="number" hide />
+                                    <YAxis
+                                        dataKey="name"
+                                        type="category"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 9, fontWeight: 700 }}
+                                        width={80}
+                                    />
+                                    <Tooltip
+                                        cursor={{ fill: 'transparent' }}
+                                        formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={15}>
+                                        {groupPerformance.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={['#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef'][index % 5]} />
+                                        ))}
+                                        <LabelList
+                                            dataKey="value"
+                                            position="right"
+                                            formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+                                            style={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}
+                                        />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div className="mt-2 pt-2 border-t border-slate-50 italic text-[9px] text-slate-400 text-center">
+                            Categorias com maior volume financeiro.
                         </div>
                     </div>
+
                 </div>
 
-                {/* Right Column: Recent Activities & Actions */}
-                <div className="space-y-8">
-                    {/* Action Center */}
-                    {canManage && (
-                        <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-slate-900/20 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/20 rounded-full blur-[80px] -mr-20 -mt-20"></div>
-                            <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-[60px] -ml-10 -mb-10"></div>
-
-                            <div className="relative z-10">
-                                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                                    <span className="p-1.5 bg-white/10 rounded-lg"><LightningBoltIcon className="w-4 h-4 text-yellow-300" /></span>
-                                    Ações Prioritárias
-                                </h3>
-
-                                <div className="space-y-3">
-                                    {analytics.criticalDemands > 0 && (
-                                        <div className="bg-red-500/20 border border-red-500/30 p-4 rounded-xl flex items-center gap-4 hover:bg-red-500/30 transition-colors cursor-pointer" onClick={() => onNavigateToSuppliers('Pendente')}>
-                                            <div className="bg-red-500 p-2 rounded-lg text-white font-bold text-xs shadow-lg animate-pulse">URGENTE</div>
-                                            <div>
-                                                <p className="font-bold text-sm text-red-100">{analytics.criticalDemands} cotas vencendo</p>
-                                                <p className="text-xs text-red-200/60">Ação necessária em 24h</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {analytics.expiringDocsCount > 0 && (
-                                        <div className="bg-orange-500/20 border border-orange-500/30 p-4 rounded-xl flex items-center gap-4 hover:bg-orange-500/30 transition-colors cursor-pointer" onClick={() => onNavigateToSuppliers('Ativo')}>
-                                            <div className="bg-orange-500 p-2 rounded-lg text-white font-bold text-xs shadow-lg"><ClockIcon className="w-4 h-4" /></div>
-                                            <div>
-                                                <p className="font-bold text-sm text-orange-100">{analytics.expiringDocsCount} Fornecedores</p>
-                                                <p className="text-xs text-orange-200/60">Documentos vencidos ou a vencer</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {safeStats.pendingSuppliers > 0 && (
-                                        <button onClick={() => onNavigateToSuppliers('Pendente')} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl flex items-center justify-between hover:bg-white/10 transition-all group">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-blue-500/20 rounded-lg text-blue-300 group-hover:bg-blue-500 group-hover:text-white transition-all"><UsersIcon className="w-4 h-4" /></div>
-                                                <div className="text-left">
-                                                    <p className="font-bold text-sm text-slate-100">{safeStats.pendingSuppliers} Novos Cadastros</p>
-                                                    <p className="text-xs text-slate-400">Aguardando aprovação</p>
-                                                </div>
-                                            </div>
-                                            <div className="bg-white/10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">{safeStats.pendingSuppliers}</div>
-                                        </button>
-                                    )}
-
-                                    <button onClick={onNavigateToQA} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl flex items-center justify-between hover:bg-white/10 transition-all group">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-purple-500/20 rounded-lg text-purple-300 group-hover:bg-purple-500 group-hover:text-white transition-all"><QAIcon className="w-4 h-4" /></div>
-                                            <div className="text-left">
-                                                <p className="font-bold text-sm text-slate-100">Central de Dúvidas</p>
-                                                <p className="text-xs text-slate-400">{analytics.pendingQuestions} perguntas não lidas</p>
-                                            </div>
-                                        </div>
-                                    </button>
-
-                                    {analytics.criticalDemands === 0 && safeStats.pendingSuppliers === 0 && analytics.expiringDocsCount === 0 && (
-                                        <div className="bg-emerald-500/20 border border-emerald-500/30 p-4 rounded-xl flex items-center gap-3">
-                                            <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-                                            <p className="text-sm font-medium text-emerald-100">Tudo em dia!</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Recent Activity Feed */}
-                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 max-h-[500px] overflow-y-auto custom-scrollbar">
-                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                            <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
-                            Últimas Atividades
-                        </h3>
-                        <div className="space-y-6 relative ml-3 border-l border-slate-100 pl-6 pb-2">
-                            {demands.slice(0, 5).map((d, i) => (
-                                <div key={d.id} className="relative">
-                                    <div className="absolute -left-[31px] top-1 w-4 h-4 rounded-full border-4 border-white bg-blue-500 shadow-sm"></div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                                        {new Date(d.createdAt).toLocaleDateString('pt-BR')}
-                                    </p>
-                                    <p className="text-sm font-bold text-slate-800">Nova demanda criada</p>
-                                    <p className="text-xs text-slate-500 mt-1 line-clamp-1">{d.title}</p>
-                                </div>
-                            ))}
-                            {suppliers.slice(0, 3).map((s, i) => (
-                                <div key={s.id} className="relative">
-                                    <div className="absolute -left-[31px] top-1 w-4 h-4 rounded-full border-4 border-white bg-emerald-500 shadow-sm"></div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                                        Recentemente
-                                    </p>
-                                    <p className="text-sm font-bold text-slate-800">Novo fornecedor</p>
-                                    <p className="text-xs text-slate-500 mt-1 line-clamp-1">{s.name}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <style>{`
@@ -349,8 +536,15 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, suppliers, groups, demands
                     animation: fade-in-down 0.5s ease-out forwards;
                 }
             `}</style>
-        </div >
+        </div>
     );
 };
+
+// Extensão rápida de ícone para compatibilidade
+const ExclamationCircleIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+    </svg>
+);
 
 export default Dashboard;

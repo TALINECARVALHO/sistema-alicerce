@@ -1,7 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { CatalogItem, Group, UserRole } from '../types';
-import { SearchIcon, PlusIcon, TagIcon, TrashIcon, CogIcon } from './icons';
+import { CatalogItem, Group, UserRole, Demand } from '../types';
+import { SearchIcon, PlusIcon, TagIcon, TrashIcon, CogIcon, ClockIcon, DollarIcon, CalendarIcon } from './icons';
+import PageHeader from './PageHeader';
+import { getPriceHistory, PriceHistoryEntry } from '../utils/priceHistory';
+import Modal from './Modal';
+import PriceHistoryModal from './PriceHistoryModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addPDFHeader, addPDFFooter } from '../utils/reportUtils';
@@ -10,14 +14,17 @@ interface CatalogProps {
     items: CatalogItem[];
     groups: Group[];
     userRole: UserRole;
+    demands: Demand[];
     onNewItem: () => void;
     onEditItem: (item: CatalogItem) => void;
-    onDeleteItem: (itemId: string) => void;
+    onDeleteItem: (id: string) => Promise<void>;
+    onNavigateToDemand?: (demandId: number) => void;
 }
 
-const Catalog: React.FC<CatalogProps> = ({ items, groups, userRole, onNewItem, onEditItem, onDeleteItem }) => {
+const Catalog: React.FC<CatalogProps> = ({ items, groups, userRole, demands, onNewItem, onEditItem, onDeleteItem, onNavigateToDemand }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedGroupFilter, setSelectedGroupFilter] = useState('all');
+    const [historyItem, setHistoryItem] = useState<{ id: string, name: string } | null>(null);
 
     const canManage = [UserRole.CONTRATACOES, UserRole.GESTOR_SUPREMO, UserRole.ALMOXARIFADO].includes(userRole);
 
@@ -122,32 +129,25 @@ const Catalog: React.FC<CatalogProps> = ({ items, groups, userRole, onNewItem, o
 
     return (
         <div className="space-y-8 animate-fade-in-down">
-            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                <div>
-                    <h1 className="text-4xl font-bold text-slate-900">Catálogo de Itens</h1>
-                    <p className="mt-1.5 text-slate-600">Gerencie os materiais e serviços disponíveis para solicitação, organizados por grupos.</p>
-                </div>
+            <PageHeader
+                title="Catálogo de Itens"
+                subtitle="Gerencie os materiais e serviços disponíveis para solicitação, organizados por grupos."
+                buttonText="Novo Item"
+                onButtonClick={onNewItem}
+                showButton={canManage}
+            >
                 {canManage && (
-                    <div className="flex gap-3">
-                        <button
-                            onClick={handleExportPDF}
-                            className="flex items-center justify-center space-x-2 bg-white text-slate-700 border border-slate-300 font-semibold px-5 py-3 rounded-lg shadow-sm hover:bg-slate-50 transition-all duration-300"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM21 12v5.25c0 .414-.336.75-.75.75H3.75a.75.75 0 01-.75-.75V12m18 0c0 .414-.336.75-.75.75H3.75a.75.75 0 01-.75-.75V12m18 0V8.25a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 8.25V12m18 0h-18" />
-                            </svg>
-                            <span>Relatório</span>
-                        </button>
-                        <button
-                            onClick={onNewItem}
-                            className="flex items-center justify-center space-x-2 bg-blue-600 text-white font-semibold px-5 py-3 rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 transform hover:scale-105"
-                        >
-                            <PlusIcon className="h-5 w-5" />
-                            <span>Novo Item</span>
-                        </button>
-                    </div>
+                    <button
+                        onClick={handleExportPDF}
+                        className="flex items-center justify-center space-x-2 bg-white text-slate-700 border border-slate-300 font-semibold px-5 py-3 rounded-lg shadow-sm hover:bg-slate-50 transition-all duration-300"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM21 12v5.25c0 .414-.336.75-.75.75H3.75a.75.75 0 01-.75-.75V12m18 0c0 .414-.336.75-.75.75H3.75a.75.75 0 01-.75-.75V12m18 0V8.25a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 8.25V12m18 0h-18" />
+                        </svg>
+                        <span>Relatório</span>
+                    </button>
                 )}
-            </div>
+            </PageHeader>
 
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row gap-4">
                 <div className="relative flex-grow">
@@ -184,7 +184,7 @@ const Catalog: React.FC<CatalogProps> = ({ items, groups, userRole, onNewItem, o
                         <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-200/80 flex justify-between items-center">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                    <div className={`w - 2 h - 6 rounded - full ${group.description === 'Materiais de Construção' ? 'bg-blue-500' : 'bg-green-500'} `}></div>
+                                    <div className={`w-2 h-6 rounded-full ${group.description === 'Materiais de Construção' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
                                     {group.name}
                                 </h3>
                                 <p className="text-xs text-slate-500 ml-4 mt-0.5">{group.description}</p>
@@ -202,16 +202,33 @@ const Catalog: React.FC<CatalogProps> = ({ items, groups, userRole, onNewItem, o
                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-24">Código</th>
                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Descrição</th>
                                             <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-24">Unid.</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-32">Último Vlr.</th>
                                             {canManage && <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider w-32">Ações</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 bg-white">
                                         {items.map(item => (
-                                            <tr key={`${group.id} -${item.id} `} className="hover:bg-slate-50 transition-colors group/row">
+                                            <tr key={`${group.id}-${item.id}`} className="hover:bg-slate-50 transition-colors group/row">
                                                 <td className="px-6 py-3 whitespace-nowrap text-xs font-mono text-slate-400">{item.id}</td>
                                                 <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-slate-700">{item.name}</td>
                                                 <td className="px-6 py-3 whitespace-nowrap text-sm text-slate-500">
                                                     <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-xs border border-slate-200">{item.unit}</span>
+                                                </td>
+                                                <td className="px-6 py-3 whitespace-nowrap text-sm">
+                                                    {(() => {
+                                                        const hist = getPriceHistory(item.name, item.id, demands);
+                                                        const last = hist.length > 0 ? hist[0] : null;
+                                                        if (!last) return <span className="text-slate-300 italic text-xs">Sem hist.</span>;
+                                                        return (
+                                                            <button
+                                                                onClick={() => setHistoryItem({ id: item.id, name: item.name })}
+                                                                className="flex items-center gap-1.5 text-blue-600 font-bold hover:underline group"
+                                                            >
+                                                                {last.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                <ClockIcon className="w-3.5 h-3.5 text-blue-300 group-hover:text-blue-500" />
+                                                            </button>
+                                                        );
+                                                    })()}
                                                 </td>
                                                 {canManage && (
                                                     <td className="px-6 py-3 whitespace-nowrap text-right text-sm font-medium">
@@ -276,13 +293,25 @@ const Catalog: React.FC<CatalogProps> = ({ items, groups, userRole, onNewItem, o
                 )}
             </div>
 
+            {/* Modal de Histórico Detalhado */}
+            {historyItem && (
+                <PriceHistoryModal
+                    isOpen={true}
+                    onClose={() => setHistoryItem(null)}
+                    description={historyItem.name}
+                    catalogItemId={historyItem.id}
+                    demands={demands}
+                    onNavigateToDemand={onNavigateToDemand}
+                />
+            )}
+
             <style>{`
-@keyframes fade -in -down {
+@keyframes fade-in-down {
                     from { opacity: 0; transform: translateY(-10px); }
                     to { opacity: 1; transform: translateY(0); }
 }
-                .animate - fade -in -down {
-    animation: fade -in -down 0.4s ease - out forwards;
+                .animate-fade-in-down {
+    animation: fade-in-down 0.4s ease-out forwards;
 }
 `}</style>
         </div>
