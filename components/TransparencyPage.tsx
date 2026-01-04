@@ -28,35 +28,87 @@ export const FAQSection = () => {
     const faqs = [
         {
             question: "Como é realizado o credenciamento de fornecedores?",
-            answer: "O credenciamento é feito exclusivamente de forma eletrônica, por meio do Sistema Alicerce. Clique em 'Sou Fornecedor' no topo da página e siga as instruções para cadastro inicial."
+            answer: "O credenciamento é realizado de forma totalmente eletrônica, por meio do Sistema Alicerce, plataforma oficial da Prefeitura de São Francisco de Paula/RS para gestão das contratações públicas."
         },
         {
-            question: "Quem pode participar das cotações?",
-            answer: "Podem participar pessoas jurídicas e físicas (quando aplicável) devidamente regularizadas e que atendam aos requisitos de habilitação exigidos para cada categoria de fornecimento."
+            question: "A inscrição no Sistema Alicerce é obrigatória?",
+            answer: "Sim. A inscrição no Sistema Alicerce é condição indispensável para participação no credenciamento."
         },
         {
-            question: "Como funcionam os prazos de resposta?",
-            answer: "Os prazos variam conforme a urgência: Materiais (1 a 5 dias úteis) e Serviços (2 a 10 dias úteis). O prazo específico de cada demanda é exibido no card da oportunidade."
+            question: "O que é necessário para se inscrever no sistema?",
+            answer: "O fornecedor deve realizar o cadastro na plataforma, preencher os dados solicitados, selecionar os grupos de materiais e/ou serviços de interesse e anexar a documentação exigida no Edital."
         },
         {
-            question: "Como saberei se venci uma cotação?",
-            answer: "Após a análise e homologação, o status da demanda muda para 'Vencedor Definido' e você receberá uma notificação por e-mail com os próximos passos para o empenho."
+            question: "Posso me credenciar em qualquer grupo de materiais ou serviços?",
+            answer: "Não. O fornecedor deve selecionar apenas os grupos compatíveis com seus CNAEs, sendo vedada a indicação de grupos sem vinculação com as atividades registradas."
         },
         {
-            question: "Onde vejo os resultados das licitações?",
-            answer: "Todos os resultados são públicos e podem ser consultados neste Portal da Transparência, na aba 'Demandas e Contratações', filtrando por status 'Vencedor Definido' ou 'Concluída'."
+            question: "Como ocorre a análise do credenciamento?",
+            answer: "A Administração Municipal analisará as informações e documentos diretamente no sistema, aprovando apenas os fornecedores que atenderem integralmente aos requisitos legais e técnicos."
         },
         {
-            question: "Quais documentos preciso manter atualizados?",
-            answer: "É essencial manter atualizadas as Certidões Negativas (Federal, Estadual, Municipal) e o FGTS. O sistema notificará quando algum documento estiver próximo do vencimento."
+            question: "Como saberei se meu credenciamento foi aprovado?",
+            answer: "Após a aprovação, o fornecedor receberá um e-mail com os dados de acesso ao sistema e um tutorial de utilização."
         },
         {
-            question: "Como é feito o pagamento?",
-            answer: "O pagamento é realizado após o recebimento definitivo do material ou serviço, seguindo o cronograma financeiro do município e mediante apresentação da Nota Fiscal correta."
+            question: "Como receberei as oportunidades de cotação?",
+            answer: "As oportunidades serão encaminhadas automaticamente pelo Sistema Alicerce, conforme os grupos em que o fornecedor estiver habilitado."
         },
         {
-            question: "Esqueci minha senha, como proceder?",
-            answer: "Na tela de login, utilize a opção 'Esqueci minha senha' para receber um link de redefinição no e-mail cadastrado."
+            question: "Como devo enviar minha proposta?",
+            answer: "A proposta deve ser preenchida e enviada exclusivamente pelo Sistema Alicerce, dentro do prazo definido para cada demanda."
+        },
+        {
+            question: "Posso alterar a proposta após o envio ou após o encerramento do prazo?",
+            answer: "Não. Após o envio da proposta ou o encerramento do prazo, não será permitida qualquer alteração."
+        },
+        {
+            question: "É possível encaminhar dúvidas sobre a demanda?",
+            answer: "Sim. Durante o período de envio das propostas, o fornecedor poderá encaminhar dúvidas pelo próprio sistema."
+        },
+        {
+            question: "Como funciona a análise das propostas?",
+            answer: "A análise é realizada de forma cega e isonômica, considerando exclusivamente os dados apresentados, sem identificação dos proponentes."
+        },
+        {
+            question: "Quais são os prazos para envio de propostas (cotação)?",
+            answer: "Prioridade Urgente: 1 dia útil | Prioridade Média: 3 dias úteis | Prioridade Baixa: 5 dias úteis"
+        },
+        {
+            question: "Quais são os prazos para entrega ou execução?",
+            answer: "Materiais - Urgente: até 1 dia útil, Normal: até 3 dias úteis, Baixa: até 5 dias úteis | Serviços - Urgente: até 2 dias úteis, Normal: até 5 dias úteis, Baixa: até 10 dias úteis"
+        },
+        {
+            question: "Os prazos podem ser descumpridos?",
+            answer: "Não. Os prazos definidos devem ser rigorosamente observados no envio das propostas e na entrega ou execução."
+        },
+        {
+            question: "Quais documentos são exigidos para habilitação?",
+            answer: "Documentos de habilitação jurídica, regularidade fiscal e regularidade trabalhista, conforme detalhado no Edital."
+        },
+        {
+            question: "Como funciona a fase de cotação?",
+            answer: "A Administração encaminha o pedido de cotação simultaneamente a todos os fornecedores credenciados e habilitados nos grupos correspondentes. As propostas permanecem sigilosas."
+        },
+        {
+            question: "Como é feita a escolha da proposta vencedora?",
+            answer: "Após a análise cega, o sistema gera ranking automático. A Administração seleciona a proposta mais vantajosa com base em critérios objetivos. Em caso de empate, vence a proposta enviada em menor tempo."
+        },
+        {
+            question: "Quando ocorre a identificação do fornecedor vencedor?",
+            answer: "Somente após a homologação do resultado, quando ocorre a quebra do sigilo da identidade do vencedor."
+        },
+        {
+            question: "A Administração é obrigada a contratar após a cotação?",
+            answer: "Não. A Administração pode não efetivar a contratação por razões devidamente justificadas de interesse público."
+        },
+        {
+            question: "Como é formalizada a contratação?",
+            answer: "A contratação é formalizada por meio de Nota de Empenho, que servirá como instrumento hábil para execução do objeto."
+        },
+        {
+            question: "Como funciona o pagamento?",
+            answer: "Serviços: pagamento em até 5 dias úteis após emissão da nota fiscal. Materiais: notas recebidas entre dias 1-15 são pagas no dia 25 subsequente; notas recebidas entre dias 16-30/31 são pagas no dia 10 subsequente."
         }
     ];
 
