@@ -55,6 +55,10 @@ export const FAQSection = () => {
                 {
                     question: "Como saberei se meu credenciamento foi aprovado?",
                     answer: "Após a aprovação, o fornecedor receberá um e-mail com os dados de acesso ao sistema e um tutorial de utilização."
+                },
+                {
+                    question: "Onde posso consultar o edital completo do processo?",
+                    answer: "O edital completo com todas as informações do processo está publicado no Portal da Transparência. Acesse: https://grp.saofranciscodepaula.rs.gov.br/transparencia/portal/#/consultaLicitacao/detalhesLicitacao/eyJudW1lcm9Ub3RhbCI6NTAzNSwidGlwb0F2YWxpYWNhbyI6IkkiLCJhZG1pbmlzdHJhY2FvIjoxLCJ0aXBvIjoiUCIsIm1vc3RyYUxpbmsiOnRydWV9"
                 }
             ]
         },
@@ -197,8 +201,8 @@ export const FAQSection = () => {
                                             className="w-full px-6 py-5 text-left hover:bg-slate-50 transition-colors flex items-start gap-4 group"
                                         >
                                             <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${isOpen
-                                                    ? 'bg-blue-600 text-white rotate-180'
-                                                    : 'bg-slate-100 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600'
+                                                ? 'bg-blue-600 text-white rotate-180'
+                                                : 'bg-slate-100 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600'
                                                 }`}>
                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
