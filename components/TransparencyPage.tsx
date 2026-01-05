@@ -25,113 +25,226 @@ import { Pagination } from './Pagination';
 import { formatDeliveryTime } from '../utils/delivery';
 
 export const FAQSection = () => {
+    const [openIndex, setOpenIndex] = useState<number | null>(null);
+
     const faqs = [
         {
-            question: "Como é realizado o credenciamento de fornecedores?",
-            answer: "O credenciamento é realizado de forma totalmente eletrônica, por meio do Sistema Alicerce, plataforma oficial da Prefeitura de São Francisco de Paula/RS para gestão das contratações públicas."
+            category: "Credenciamento",
+            icon: "📝",
+            questions: [
+                {
+                    question: "Como é realizado o credenciamento de fornecedores?",
+                    answer: "O credenciamento é realizado de forma totalmente eletrônica, por meio do Sistema Alicerce, plataforma oficial da Prefeitura de São Francisco de Paula/RS para gestão das contratações públicas."
+                },
+                {
+                    question: "A inscrição no Sistema Alicerce é obrigatória?",
+                    answer: "Sim. A inscrição no Sistema Alicerce é condição indispensável para participação no credenciamento."
+                },
+                {
+                    question: "O que é necessário para se inscrever no sistema?",
+                    answer: "O fornecedor deve realizar o cadastro na plataforma, preencher os dados solicitados, selecionar os grupos de materiais e/ou serviços de interesse e anexar a documentação exigida no Edital."
+                },
+                {
+                    question: "Posso me credenciar em qualquer grupo de materiais ou serviços?",
+                    answer: "Não. O fornecedor deve selecionar apenas os grupos compatíveis com seus CNAEs, sendo vedada a indicação de grupos sem vinculação com as atividades registradas."
+                },
+                {
+                    question: "Como ocorre a análise do credenciamento?",
+                    answer: "A Administração Municipal analisará as informações e documentos diretamente no sistema, aprovando apenas os fornecedores que atenderem integralmente aos requisitos legais e técnicos."
+                },
+                {
+                    question: "Como saberei se meu credenciamento foi aprovado?",
+                    answer: "Após a aprovação, o fornecedor receberá um e-mail com os dados de acesso ao sistema e um tutorial de utilização."
+                }
+            ]
         },
         {
-            question: "A inscrição no Sistema Alicerce é obrigatória?",
-            answer: "Sim. A inscrição no Sistema Alicerce é condição indispensável para participação no credenciamento."
+            category: "Propostas e Cotações",
+            icon: "💼",
+            questions: [
+                {
+                    question: "Como receberei as oportunidades de cotação?",
+                    answer: "As oportunidades serão encaminhadas automaticamente pelo Sistema Alicerce, conforme os grupos em que o fornecedor estiver habilitado."
+                },
+                {
+                    question: "Como devo enviar minha proposta?",
+                    answer: "A proposta deve ser preenchida e enviada exclusivamente pelo Sistema Alicerce, dentro do prazo definido para cada demanda."
+                },
+                {
+                    question: "Posso alterar a proposta após o envio ou após o encerramento do prazo?",
+                    answer: "Não. Após o envio da proposta ou o encerramento do prazo, não será permitida qualquer alteração."
+                },
+                {
+                    question: "É possível encaminhar dúvidas sobre a demanda?",
+                    answer: "Sim. Durante o período de envio das propostas, o fornecedor poderá encaminhar dúvidas pelo próprio sistema."
+                },
+                {
+                    question: "Como funciona a análise das propostas?",
+                    answer: "A análise é realizada de forma cega e isonômica, considerando exclusivamente os dados apresentados, sem identificação dos proponentes."
+                },
+                {
+                    question: "Como funciona a fase de cotação?",
+                    answer: "A Administração encaminha o pedido de cotação simultaneamente a todos os fornecedores credenciados e habilitados nos grupos correspondentes. As propostas permanecem sigilosas."
+                }
+            ]
         },
         {
-            question: "O que é necessário para se inscrever no sistema?",
-            answer: "O fornecedor deve realizar o cadastro na plataforma, preencher os dados solicitados, selecionar os grupos de materiais e/ou serviços de interesse e anexar a documentação exigida no Edital."
+            category: "Prazos",
+            icon: "⏰",
+            questions: [
+                {
+                    question: "Quais são os prazos para envio de propostas (cotação)?",
+                    answer: "Prioridade Urgente: 1 dia útil | Prioridade Média: 3 dias úteis | Prioridade Baixa: 5 dias úteis"
+                },
+                {
+                    question: "Quais são os prazos para entrega ou execução?",
+                    answer: "Materiais - Urgente: até 1 dia útil, Normal: até 3 dias úteis, Baixa: até 5 dias úteis | Serviços - Urgente: até 2 dias úteis, Normal: até 5 dias úteis, Baixa: até 10 dias úteis"
+                },
+                {
+                    question: "Os prazos podem ser descumpridos?",
+                    answer: "Não. Os prazos definidos devem ser rigorosamente observados no envio das propostas e na entrega ou execução."
+                }
+            ]
         },
         {
-            question: "Posso me credenciar em qualquer grupo de materiais ou serviços?",
-            answer: "Não. O fornecedor deve selecionar apenas os grupos compatíveis com seus CNAEs, sendo vedada a indicação de grupos sem vinculação com as atividades registradas."
+            category: "Documentação e Habilitação",
+            icon: "📄",
+            questions: [
+                {
+                    question: "Quais documentos são exigidos para habilitação?",
+                    answer: "Documentos de habilitação jurídica, regularidade fiscal e regularidade trabalhista, conforme detalhado no Edital."
+                }
+            ]
         },
         {
-            question: "Como ocorre a análise do credenciamento?",
-            answer: "A Administração Municipal analisará as informações e documentos diretamente no sistema, aprovando apenas os fornecedores que atenderem integralmente aos requisitos legais e técnicos."
+            category: "Resultado e Contratação",
+            icon: "🏆",
+            questions: [
+                {
+                    question: "Como é feita a escolha da proposta vencedora?",
+                    answer: "Após a análise cega, o sistema gera ranking automático. A Administração seleciona a proposta mais vantajosa com base em critérios objetivos. Em caso de empate, vence a proposta enviada em menor tempo."
+                },
+                {
+                    question: "Quando ocorre a identificação do fornecedor vencedor?",
+                    answer: "Somente após a homologação do resultado, quando ocorre a quebra do sigilo da identidade do vencedor."
+                },
+                {
+                    question: "A Administração é obrigada a contratar após a cotação?",
+                    answer: "Não. A Administração pode não efetivar a contratação por razões devidamente justificadas de interesse público."
+                },
+                {
+                    question: "Como é formalizada a contratação?",
+                    answer: "A contratação é formalizada por meio de Nota de Empenho, que servirá como instrumento hábil para execução do objeto."
+                }
+            ]
         },
         {
-            question: "Como saberei se meu credenciamento foi aprovado?",
-            answer: "Após a aprovação, o fornecedor receberá um e-mail com os dados de acesso ao sistema e um tutorial de utilização."
-        },
-        {
-            question: "Como receberei as oportunidades de cotação?",
-            answer: "As oportunidades serão encaminhadas automaticamente pelo Sistema Alicerce, conforme os grupos em que o fornecedor estiver habilitado."
-        },
-        {
-            question: "Como devo enviar minha proposta?",
-            answer: "A proposta deve ser preenchida e enviada exclusivamente pelo Sistema Alicerce, dentro do prazo definido para cada demanda."
-        },
-        {
-            question: "Posso alterar a proposta após o envio ou após o encerramento do prazo?",
-            answer: "Não. Após o envio da proposta ou o encerramento do prazo, não será permitida qualquer alteração."
-        },
-        {
-            question: "É possível encaminhar dúvidas sobre a demanda?",
-            answer: "Sim. Durante o período de envio das propostas, o fornecedor poderá encaminhar dúvidas pelo próprio sistema."
-        },
-        {
-            question: "Como funciona a análise das propostas?",
-            answer: "A análise é realizada de forma cega e isonômica, considerando exclusivamente os dados apresentados, sem identificação dos proponentes."
-        },
-        {
-            question: "Quais são os prazos para envio de propostas (cotação)?",
-            answer: "Prioridade Urgente: 1 dia útil | Prioridade Média: 3 dias úteis | Prioridade Baixa: 5 dias úteis"
-        },
-        {
-            question: "Quais são os prazos para entrega ou execução?",
-            answer: "Materiais - Urgente: até 1 dia útil, Normal: até 3 dias úteis, Baixa: até 5 dias úteis | Serviços - Urgente: até 2 dias úteis, Normal: até 5 dias úteis, Baixa: até 10 dias úteis"
-        },
-        {
-            question: "Os prazos podem ser descumpridos?",
-            answer: "Não. Os prazos definidos devem ser rigorosamente observados no envio das propostas e na entrega ou execução."
-        },
-        {
-            question: "Quais documentos são exigidos para habilitação?",
-            answer: "Documentos de habilitação jurídica, regularidade fiscal e regularidade trabalhista, conforme detalhado no Edital."
-        },
-        {
-            question: "Como funciona a fase de cotação?",
-            answer: "A Administração encaminha o pedido de cotação simultaneamente a todos os fornecedores credenciados e habilitados nos grupos correspondentes. As propostas permanecem sigilosas."
-        },
-        {
-            question: "Como é feita a escolha da proposta vencedora?",
-            answer: "Após a análise cega, o sistema gera ranking automático. A Administração seleciona a proposta mais vantajosa com base em critérios objetivos. Em caso de empate, vence a proposta enviada em menor tempo."
-        },
-        {
-            question: "Quando ocorre a identificação do fornecedor vencedor?",
-            answer: "Somente após a homologação do resultado, quando ocorre a quebra do sigilo da identidade do vencedor."
-        },
-        {
-            question: "A Administração é obrigada a contratar após a cotação?",
-            answer: "Não. A Administração pode não efetivar a contratação por razões devidamente justificadas de interesse público."
-        },
-        {
-            question: "Como é formalizada a contratação?",
-            answer: "A contratação é formalizada por meio de Nota de Empenho, que servirá como instrumento hábil para execução do objeto."
-        },
-        {
-            question: "Como funciona o pagamento?",
-            answer: "Serviços: pagamento em até 5 dias úteis após emissão da nota fiscal. Materiais: notas recebidas entre dias 1-15 são pagas no dia 25 subsequente; notas recebidas entre dias 16-30/31 são pagas no dia 10 subsequente."
+            category: "Pagamento",
+            icon: "💰",
+            questions: [
+                {
+                    question: "Como funciona o pagamento?",
+                    answer: "Serviços: pagamento em até 5 dias úteis após emissão da nota fiscal. Materiais: notas recebidas entre dias 1-15 são pagas no dia 25 subsequente; notas recebidas entre dias 16-30/31 são pagas no dia 10 subsequente."
+                }
+            ]
         }
     ];
 
+    // Flatten all questions with their category for indexing
+    const allQuestions = faqs.flatMap((category, catIndex) =>
+        category.questions.map((q, qIndex) => ({
+            ...q,
+            categoryName: category.category,
+            categoryIcon: category.icon,
+            globalIndex: catIndex * 100 + qIndex
+        }))
+    );
+
     return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-fade-in-down py-12 px-4">
+        <div className="max-w-6xl mx-auto space-y-8 animate-fade-in-down py-16 px-4">
             <div className="text-center mb-12">
-                <span className="text-blue-600 font-semibold tracking-wider uppercase text-sm">Tira Dúvidas</span>
-                <h2 className="text-4xl font-extrabold text-slate-800 mt-2">Perguntas Frequentes</h2>
-                <p className="text-slate-600 mt-4 max-w-2xl mx-auto text-lg">Entenda como funciona o processo de compras públicas e o uso do Sistema Alicerce.</p>
+                <span className="text-blue-600 font-semibold tracking-wider uppercase text-sm">Tire suas Dúvidas</span>
+                <h2 className="text-5xl font-extrabold text-slate-800 mt-2 mb-4">Perguntas Frequentes</h2>
+                <p className="text-slate-600 mt-4 max-w-2xl mx-auto text-lg">
+                    Entenda como funciona o processo de credenciamento, cotação e contratação no Sistema Alicerce.
+                </p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
-                {faqs.map((faq, index) => (
-                    <div key={index} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
-                        <div className="bg-blue-50 w-10 h-10 rounded-full flex items-center justify-center text-blue-600 font-bold mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                            ?
+            <div className="space-y-6">
+                {faqs.map((category, catIndex) => (
+                    <div key={catIndex} className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+                        {/* Category Header */}
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-slate-200">
+                            <div className="flex items-center gap-3">
+                                <span className="text-3xl">{category.icon}</span>
+                                <h3 className="text-xl font-bold text-slate-800">{category.category}</h3>
+                                <span className="ml-auto bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">
+                                    {category.questions.length} {category.questions.length === 1 ? 'pergunta' : 'perguntas'}
+                                </span>
+                            </div>
                         </div>
-                        <h3 className="font-bold text-lg text-slate-800 mb-3 group-hover:text-blue-600 transition-colors">
-                            {faq.question}
-                        </h3>
-                        <p className="text-slate-600 leading-relaxed text-sm">{faq.answer}</p>
+
+                        {/* Questions */}
+                        <div className="divide-y divide-slate-100">
+                            {category.questions.map((faq, qIndex) => {
+                                const globalIndex = catIndex * 100 + qIndex;
+                                const isOpen = openIndex === globalIndex;
+
+                                return (
+                                    <div key={qIndex} className="transition-all">
+                                        <button
+                                            onClick={() => setOpenIndex(isOpen ? null : globalIndex)}
+                                            className="w-full px-6 py-5 text-left hover:bg-slate-50 transition-colors flex items-start gap-4 group"
+                                        >
+                                            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${isOpen
+                                                    ? 'bg-blue-600 text-white rotate-180'
+                                                    : 'bg-slate-100 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600'
+                                                }`}>
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className={`font-bold text-base leading-tight transition-colors ${isOpen ? 'text-blue-600' : 'text-slate-800 group-hover:text-blue-600'
+                                                    }`}>
+                                                    {faq.question}
+                                                </h4>
+                                            </div>
+                                        </button>
+
+                                        {/* Answer - Accordion */}
+                                        <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                                            }`}>
+                                            <div className="px-6 pb-5 pl-18">
+                                                <div className="bg-blue-50 border-l-4 border-blue-600 rounded-r-lg p-4">
+                                                    <p className="text-slate-700 leading-relaxed">
+                                                        {faq.answer}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 ))}
+            </div>
+
+            {/* Call to Action */}
+            <div className="mt-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-xl p-8 text-center text-white">
+                <h3 className="text-2xl font-bold mb-3">Ainda tem dúvidas?</h3>
+                <p className="text-blue-100 mb-6 max-w-2xl mx-auto">
+                    Entre em contato com a Prefeitura Municipal de São Francisco de Paula/RS para esclarecimentos adicionais.
+                </p>
+                <div className="flex flex-wrap justify-center gap-4">
+                    <a
+                        href="mailto:contato@saofransciscodepaula.rs.gov.br"
+                        className="bg-white text-blue-600 px-6 py-3 rounded-lg font-bold hover:bg-blue-50 transition-all hover:scale-105 shadow-lg"
+                    >
+                        📧 Enviar E-mail
+                    </a>
+                </div>
             </div>
         </div>
     );
