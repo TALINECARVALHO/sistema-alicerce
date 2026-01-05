@@ -222,7 +222,22 @@ export const FAQSection = () => {
                                             <div className="px-6 pb-5 pl-18">
                                                 <div className="bg-blue-50 border-l-4 border-blue-600 rounded-r-lg p-4">
                                                     <p className="text-slate-700 leading-relaxed">
-                                                        {faq.answer}
+                                                        {faq.answer.includes('https://') ? (
+                                                            <>
+                                                                {faq.answer.split('https://')[0]}
+                                                                <a
+                                                                    href={`https://${faq.answer.split('https://')[1]}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-blue-600 hover:text-blue-800 underline font-medium break-all"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    Clique aqui para acessar o edital completo
+                                                                </a>
+                                                            </>
+                                                        ) : (
+                                                            faq.answer
+                                                        )}
                                                     </p>
                                                 </div>
                                             </div>
