@@ -582,19 +582,50 @@ export const notifySuppliersNewDemand = async (demand: Demand, groups: Group[]) 
 export const fetchCatalogItems = async (): Promise<CatalogItem[]> => {
     const { data, error } = await supabase.from('catalog_items').select('*').order('name');
     if (error) throw error;
-    return data as CatalogItem[];
+
+    return ((data || []) as any[]).map(item => ({
+        ...item,
+        suggestedBrands: item.suggested_brands,
+        createdAt: item.created_at
+    })) as CatalogItem[];
 };
 
 export const createCatalogItem = async (item: Omit<CatalogItem, 'id'>): Promise<CatalogItem> => {
-    const { data, error } = await supabase.from('catalog_items').insert([item]).select().single();
+    const payload = {
+        name: item.name,
+        unit: item.unit,
+        groups: item.groups,
+        type: item.type,
+        suggested_brands: item.suggestedBrands
+    };
+
+    const { data, error } = await supabase.from('catalog_items').insert([payload]).select().single();
     if (error) throw error;
-    return data as CatalogItem;
+
+    return {
+        ...data,
+        suggestedBrands: data.suggested_brands,
+        createdAt: data.created_at
+    } as CatalogItem;
 };
 
 export const updateCatalogItem = async (item: CatalogItem): Promise<CatalogItem> => {
-    const { data, error } = await supabase.from('catalog_items').update(item).eq('id', item.id).select().single();
+    const payload = {
+        name: item.name,
+        unit: item.unit,
+        groups: item.groups,
+        type: item.type,
+        suggested_brands: item.suggestedBrands
+    };
+
+    const { data, error } = await supabase.from('catalog_items').update(payload).eq('id', item.id).select().single();
     if (error) throw error;
-    return data as CatalogItem;
+
+    return {
+        ...data,
+        suggestedBrands: data.suggested_brands,
+        createdAt: data.created_at
+    } as CatalogItem;
 };
 
 export const deleteCatalogItem = async (id: string): Promise<void> => {

@@ -29,6 +29,7 @@ const DemandForm: React.FC<DemandFormProps> = ({ editingDraft, onSubmit, onCance
   // Contact email fallback to profile, but use initialData if present
   const [contactEmail, setContactEmail] = useState(editingDraft?.contactEmail || '');
   const [sector, setSector] = useState(editingDraft?.sector || '');
+  const [budgetCode, setBudgetCode] = useState(editingDraft?.budgetCode || '');
   const [type, setType] = useState<'Materiais' | 'Serviços'>(editingDraft?.type as any || 'Materiais');
   const [deliveryLocation, setDeliveryLocation] = useState(editingDraft?.deliveryLocation || '');
   const [priority, setPriority] = useState<Priority>(editingDraft?.priority || Priority.MEDIA);
@@ -41,6 +42,8 @@ const DemandForm: React.FC<DemandFormProps> = ({ editingDraft, onSubmit, onCance
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(
     editingDraft?.items ? Array.from(new Set(editingDraft.items.map(i => i.group_id))) : []
   );
+
+  // ... (rest of the state and effects) ...
 
   // Initialize items without IDs for the form state
   const [items, setItems] = useState<Omit<Item, 'id'>[]>(
@@ -207,7 +210,7 @@ const DemandForm: React.FC<DemandFormProps> = ({ editingDraft, onSubmit, onCance
     onSubmit({
       title, requestingDepartment, sector, contactEmail, type, deliveryLocation, priority,
       requestDescription, items: finalItems, justification: priority === Priority.URGENTE ? justification : undefined,
-      proposalDeadline: finalProposalDeadline, deadline: finalDeliveryDeadline as any
+      proposalDeadline: finalProposalDeadline, deadline: finalDeliveryDeadline as any, budgetCode
     }, status);
   };
 
@@ -265,6 +268,17 @@ const DemandForm: React.FC<DemandFormProps> = ({ editingDraft, onSubmit, onCance
                 return <option key={l.id} value={fullText}>{l.name}</option>;
               })}
             </datalist>
+          </div>
+
+          <div>
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Número da Dotação Orçamentária</label>
+            <input
+              type="text"
+              value={budgetCode}
+              onChange={e => setBudgetCode(e.target.value)}
+              className="w-full rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white shadow-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 px-4 py-3.5 transition-all outline-none font-medium text-slate-700"
+              placeholder="Ex: 10.301.0001.2.001"
+            />
           </div>
         </div>
 

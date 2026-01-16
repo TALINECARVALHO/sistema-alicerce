@@ -193,6 +193,7 @@ export type CatalogItem = {
     groups: string[];
     unit: string;
     type: 'Material' | 'Serviço';
+    suggestedBrands?: string; // Comma separated list of suggested brands
     createdAt?: string;
 }
 

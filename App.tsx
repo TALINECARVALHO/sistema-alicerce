@@ -284,6 +284,7 @@ export const AppContent: React.FC = () => {
                 sector: demandData.sector,
                 proposal_deadline: demandData.proposalDeadline,
                 deadline: demandData.deadline, // This might be redundant if mapped to proposal_deadline logic, but keeping it
+                budget_code: demandData.budgetCode,
                 protocol,
                 status,
                 created_at: new Date().toISOString()
@@ -355,6 +356,7 @@ export const AppContent: React.FC = () => {
             if (demandDetails.proposalDeadline !== undefined) dbPayload.proposal_deadline = demandDetails.proposalDeadline;
             if (demandDetails.deadline !== undefined) dbPayload.deadline = demandDetails.deadline;
             if (demandDetails.status !== undefined) dbPayload.status = demandDetails.status;
+            if (demandDetails.budgetCode !== undefined) dbPayload.budget_code = demandDetails.budgetCode;
             // Add other fields as necessary if they are editable
             if (demandDetails.approval_observations !== undefined) dbPayload.approval_observations = demandDetails.approval_observations;
 

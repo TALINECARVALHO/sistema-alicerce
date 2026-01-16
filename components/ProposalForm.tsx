@@ -18,6 +18,7 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
     // Acknowledgment checkboxes
     const [acknowledgeDelivery, setAcknowledgeDelivery] = useState(false);
     const [acknowledgeSanctions, setAcknowledgeSanctions] = useState(false);
+    const [acknowledgeNoObligation, setAcknowledgeNoObligation] = useState(false);
 
     // Filter items based on supplier's registered groups
     const filteredItems = useMemo(() => {
@@ -100,10 +101,23 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
             return;
         }
 
-        // Validate that at least one item is NOT declined and has a price
-        const hasValidItem = items.some(i => !i.isDeclined && i.unitPrice > 0);
-        if (!hasValidItem) {
-            warning("A proposta deve ter pelo menos um item cotado (não declinado) com valor maior que R$ 0,00.");
+        // Validate that all items NOT declined have a Brand and Price > 0
+        const itemsToSubmit = items.filter(i => !i.isDeclined);
+
+        if (itemsToSubmit.length === 0) {
+            warning("A proposta deve ter pelo menos um item cotado.");
+            return;
+        }
+
+        const missingBrand = itemsToSubmit.find(i => !i.brand || !i.brand.trim());
+        if (missingBrand) {
+            warning("É obrigatório informar a marca/fabricante para todos os itens cotados.");
+            return;
+        }
+
+        const invalidPrice = itemsToSubmit.find(i => i.unitPrice <= 0);
+        if (invalidPrice) {
+            warning("Todos os itens cotados devem ter valor maior que R$ 0,00.");
             return;
         }
 
@@ -131,6 +145,10 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
         }
         if (!acknowledgeSanctions) {
             warning("Você deve confirmar que está ciente sobre as sanções em caso de descumprimento.");
+            return;
+        }
+        if (!acknowledgeNoObligation) {
+            warning("Você deve confirmar estar ciente da não obrigatoriedade de contratação pelo município.");
             return;
         }
 
@@ -174,7 +192,7 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
                 {/* Header Row (Hidden on mobile) */}
                 <div className="hidden md:grid grid-cols-12 gap-4 px-4 pb-2 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
                     <div className="col-span-4">Descrição / Quantidade</div>
-                    <div className="col-span-3">Marca / Fabricante</div>
+                    <div className="col-span-3">Marca / Fabricante <span className="text-red-500">*</span></div>
                     <div className="col-span-2">Preço Unit. (R$)</div>
                     <div className="col-span-1">EXCLUIR</div>
                     <div className="col-span-2 text-right">Total Item</div>
@@ -205,7 +223,7 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
 
                                     {/* Brand Input */}
                                     <div className="md:col-span-3">
-                                        <label className="md:hidden block text-xs font-bold text-slate-600 uppercase mb-1">Marca</label>
+                                        <label className="md:hidden block text-xs font-bold text-slate-600 uppercase mb-1">Marca <span className="text-red-500">*</span></label>
                                         <input
                                             type="text"
                                             value={currentBrand}
@@ -213,6 +231,7 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
                                             className={`w-full rounded-md border-slate-300 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 ${isDeclined ? 'bg-slate-200 cursor-not-allowed text-slate-500' : ''}`}
                                             placeholder={isDeclined ? "ITEM DECLINADO" : "Ex: Tigre..."}
                                             disabled={isDeclined}
+                                            required={!isDeclined}
                                         />
                                     </div>
 
@@ -399,14 +418,33 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
                             </span>
                         </label>
                     </div>
+
+                    {/* Checkbox 3: No Obligation to Purchase */}
+                    <div className={`flex items-start gap-3 p-4 bg-white rounded-lg border-2 transition-all ${acknowledgeNoObligation ? 'border-green-300 bg-green-50' : 'border-amber-200'}`}>
+                        <input
+                            type="checkbox"
+                            id="acknowledgeNoObligation"
+                            checked={acknowledgeNoObligation}
+                            onChange={(e) => setAcknowledgeNoObligation(e.target.checked)}
+                            className="mt-1 h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+                        />
+                        <label htmlFor="acknowledgeNoObligation" className="flex-1 cursor-pointer">
+                            <span className="block text-sm font-bold text-slate-800 mb-1">
+                                ✓ Ciência sobre Não Obrigatoriedade de Contratação
+                            </span>
+                            <span className="block text-xs text-slate-600 leading-relaxed">
+                                Por se tratar de um credenciamento, declaro estar ciente de que <strong>o município não tem obrigação na compra</strong> e/ou contratação, podendo, por motivo de força maior ou interesse público, desistir da contratação mesmo após a definição do vencedor.
+                            </span>
+                        </label>
+                    </div>
                 </div>
 
-                {(!acknowledgeDelivery || !acknowledgeSanctions) && (
+                {(!acknowledgeDelivery || !acknowledgeSanctions || !acknowledgeNoObligation) && (
                     <div className="flex items-center gap-2 text-amber-800 text-xs bg-amber-100 px-4 py-2 rounded-lg border border-amber-300">
                         <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                         </svg>
-                        <span className="font-medium">Você precisa marcar ambas as declarações para enviar a proposta.</span>
+                        <span className="font-medium">Você precisa marcar todas as declarações para enviar a proposta.</span>
                     </div>
                 )}
             </div>
@@ -414,8 +452,8 @@ const ProposalForm: React.FC<ProposalFormProps> = ({ demand, onSubmit, currentSu
             <div className="flex justify-end pt-6 border-t border-slate-100">
                 <button
                     type="submit"
-                    disabled={isSubmitting || !acknowledgeDelivery || !acknowledgeSanctions}
-                    className={`px-10 py-4 bg-green-600 text-white font-black text-xl rounded-xl shadow-xl transition-all transform flex items-center gap-3 ${isSubmitting || !acknowledgeDelivery || !acknowledgeSanctions
+                    disabled={isSubmitting || !acknowledgeDelivery || !acknowledgeSanctions || !acknowledgeNoObligation}
+                    className={`px-10 py-4 bg-green-600 text-white font-black text-xl rounded-xl shadow-xl transition-all transform flex items-center gap-3 ${isSubmitting || !acknowledgeDelivery || !acknowledgeSanctions || !acknowledgeNoObligation
                         ? 'opacity-50 cursor-not-allowed'
                         : 'hover:bg-green-700 hover:scale-105 active:scale-95'
                         }`}
